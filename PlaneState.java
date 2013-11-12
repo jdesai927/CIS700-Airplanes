@@ -7,8 +7,15 @@ public class PlaneState
   {
     plane = p;
   }
+  
   Plane plane;
+  Trajectory path;
   boolean orbitState = false;
   boolean orbitReached = false;
   double orbitBearing = 0;
+ 
+  public void setPath(Trajectory t) {
+	  path = t;
+  }
+  
 }
