@@ -1,13 +1,17 @@
 package airplane.g5;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
+import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 
 import org.apache.log4j.Logger;
 
 import airplane.sim.Plane;
+import airplane.sim.SimulationResult;
 
 
 
@@ -21,8 +25,14 @@ public class Group5Player extends airplane.sim.Player
   private PlaneState[] planeStateArray;
 
   // Temporary for demo
-  private static double radius = 15;
-  private static boolean landingLock = false;
+  private static double standardZoneRadius = 15;
+
+  // Zones
+  private Set<Zone> zones;
+
+  // Simulation
+  private static boolean simulationMode = false;
+  private static boolean setTrajectory = false;
 
   private static final double WAITING = -1;
   private static final double LANDED = -2;
@@ -46,6 +56,7 @@ public class Group5Player extends airplane.sim.Player
 
     planeStateMap = new HashMap<Plane, PlaneState> ();
     planeStateArray = new PlaneState[planes.size() + 1];
+    zones = new HashSet<Zone> ();
     for (int i = 0; i < planes.size(); i++)
     {
       Plane plane = planes.get(i);
@@ -85,15 +96,17 @@ public class Group5Player extends airplane.sim.Player
       bearings[i] = bearingArrayOrig[i];
     }
     
-    landingLock = false;
-    // update landing lock
+    for (Zone zone : zones)
+    {
+      zone.landingLock = false;
+    }
+    // update landing locks
     for (int i = 0; i < planes.size(); i++)
     {
       PlaneState planeState = planeStateArray[i];
       if (planeState.landingLock == true)
       {
-        landingLock = true;
-        break;
+        planeState.currentZone.landingLock = true;
       }
     }
 
@@ -113,16 +126,61 @@ public class Group5Player extends airplane.sim.Player
       // state clause
       if (planeState.state == PlaneState.States.NULL_STATE)
       {
-        if (acquireLandingLock(planeState))
+        // set up trajectory by running simulation
+        /*if (!simulationMode)
         {
-          double bearing = spiralOrbit(planeState, plane.getDestination());
-          bearings[i] = bearing;
+          simulationMode = true;
+          setTrajectory = false;
+          if (setTrajectory == false)
+          {
+            planeState.simulationTrajectory = LINE;
+            SimulationResult result = startSimulation(planes, round);
+            planeState.trajectoryAcquired = true;
+          }
+          if (!result == SimulationResult.NORMAL)
+          {
+            setTrajectory = false;
+          }
+          else
+          {
+            setTrajectory = true;
+          }
+          if (setTrajectory == false)
+          {
+            planeState.simulationTrajectory = SPIRAL;
+            result = startSimulation(planes, round);
+            planeState.trajectoryAcquired = true;
+            if (!result == SimulationResult.NORMAL)
+            {
+              setTrajectory = false;
+            }
+          }
+          else
+          {
+            setTrajectory = true;
+          }
+
+          else
+          {
+            setTrajectory = true;
+          }
+
+          simulationMode = false;
         }
-        else
-        {
-          double bearing = joinOrbit(planeState, plane.getDestination(), radius);
-          bearings[i] = bearing;
-        }
+
+        if (planeState.trajectoryAcquired && (setTrajectory == true || simulationMode))
+        {*/
+          if (/*planeState.simulationTrajectory == LINE && */acquireLandingLock(planeState))
+          {
+            double bearing = spiralOrbit(planeState, plane.getDestination());
+            bearings[i] = bearing;
+          }
+          else /*if (planeState.simulationTrajectory == ORBIT)*/
+          {
+            double bearing = joinOrbit(planeState, plane.getDestination(), standardZoneRadius);
+            bearings[i] = bearing;
+          }
+        //}
       }
       else if (planeState.state == PlaneState.States.ORBIT_STATE)
       {
@@ -134,7 +192,7 @@ public class Group5Player extends airplane.sim.Player
         }
         else
         {
-          double bearing = getOrbitBearing(planeState, plane.getDestination(), radius);
+          double bearing = getOrbitBearing(planeState, plane.getDestination(), standardZoneRadius);
           bearings[i] = bearing;
         }
       }
@@ -154,12 +212,45 @@ public class Group5Player extends airplane.sim.Player
     return bearings;
   }
 
+  public void setZone(PlaneState planeState, Point2D center, double radius)
+  {
+    boolean zoneFound = false;
+    for (Zone zone : zones)
+    {
+      if (zone.center.distance(center) < zone.radius)
+      {
+        zoneFound = true;
+        planeState.currentZone = zone;
+      }
+    }
+    if (!zoneFound)
+    {
+      Zone zone = new Zone(center, radius);
+      Zone zoneSelect;
+      if (checkValidZone(zone) == zone)
+        zones.add(zone);
+      planeState.currentZone = zone;
+    }
+  }
+
+  public Zone checkValidZone(Zone zone1)
+  {
+    for(Zone zone2 : zones)
+    {
+      if (zone1.center.distance(zone2.center) < zone1.radius + zone2.radius)
+        return zone2;
+    }
+    return zone1;
+  }
+
   public boolean acquireLandingLock(PlaneState planeState)
   {
-    if (landingLock == false)
+    Plane plane = planeState.plane;
+    setZone(planeState, plane.getDestination(), standardZoneRadius);
+    if (planeState.currentZone.landingLock == false)
     {
-      landingLock = true;
       planeState.landingLock = true;
+      planeState.currentZone.landingLock = true;
       return true;
     }
     else
@@ -171,7 +262,7 @@ public class Group5Player extends airplane.sim.Player
     if (planeState.landingLock == true)
     {
       planeState.landingLock = false;
-      landingLock = false;
+      planeState.currentZone.landingLock = false;
       return true;
     }
     return false;
@@ -195,6 +286,18 @@ public class Group5Player extends airplane.sim.Player
   {
     planeState.state = PlaneState.States.ORBIT_STATE;
     double bearing = getOrbitBearing(planeState, center, radius);
+
+    Plane plane = planeState.plane;
+    Vector tangent = new Vector(1, 0);
+    Vector radial = tangent.rotate(180 - bearing);
+    radial.multiply((float)radius);
+    Vector centerVec = new Vector(plane.getLocation(), center);
+    tangent = Vector.addVectors(centerVec, radial);
+    Vector locationVector = new Vector(plane.getLocation());
+    Vector tangentAbsolute = Vector.addVectors(locationVector, tangent);
+    planeState.path = new Trajectory(new Line2D.Double(plane.getLocation(), tangentAbsolute.getPoint()));
+    
+
     return bearing;
   }
 
@@ -207,6 +310,8 @@ public class Group5Player extends airplane.sim.Player
   {
     planeState.state = PlaneState.States.SPIRAL_STATE;
     Plane plane = planeState.plane;
+    Line2D path = new Line2D.Double(plane.getLocation(), destination);
+    planeState.path = new Trajectory(path);
     double bearingDest = calculateBearing(plane.getLocation(), destination);
     if (planeState.bearingOrig == WAITING)
         return bearingDest;
