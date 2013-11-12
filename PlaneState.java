@@ -10,9 +10,17 @@ public class PlaneState
   
   Plane plane;
   Trajectory path;
-  boolean orbitState = false;
-  boolean orbitReached = false;
-  double orbitBearing = 0;
+
+  // states
+  public enum States
+  {
+    NULL_STATE, ORBIT_STATE, SPIRAL_STATE;
+  }
+
+  States state = States.NULL_STATE;
+
+  double bearingOrig = 0;
+  boolean landingLock = false;
  
   public void setPath(Trajectory t) {
 	  path = t;
