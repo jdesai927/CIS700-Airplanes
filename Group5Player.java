@@ -56,6 +56,19 @@ public class Group5Player extends airplane.sim.Player
 
   }
 
+  private static boolean isTooClose(Plane p1, ArrayList<Plane> planes) {
+	  boolean tooClose = false;
+	  Point2D.Double currLoc = p1.getLocation();
+	  for (Plane p2 : planes) {
+		  if (!p1.equals(p2) && currLoc.distance(p2.getLocation()) <= 5) {
+			  tooClose = true;
+			  break;
+		  }
+	  }
+	  
+	  return tooClose;
+  }
+  
   /*
    * This is called at each step of the simulation.
    * The List of Planes represents their current location, destination, and current
@@ -91,7 +104,7 @@ public class Group5Player extends airplane.sim.Player
       PlaneState planeState = planeStateArray[i];
       double bearingOrig = bearingArrayOrig[i];
       planeState.bearingOrig = bearingOrig;
-      if (plane.getDepartureTime() > round)
+      if (plane.getDepartureTime() > round || isTooClose(plane, planes))
       {
         // departure time in future: skip
         continue;

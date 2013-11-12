@@ -1,4 +1,6 @@
 package airplane.g5;
+import java.util.ArrayList;
+
 import airplane.sim.Plane;
 
 public class PlaneState
@@ -9,7 +11,7 @@ public class PlaneState
   }
   
   Plane plane;
-  Trajectory path;
+  ArrayList<Trajectory> path;
 
   // states
   public enum States
@@ -22,7 +24,7 @@ public class PlaneState
   double bearingOrig = 0;
   boolean landingLock = false;
  
-  public void setPath(Trajectory t) {
+  public void setPath(ArrayList<Trajectory> t) {
 	  path = t;
   }
   
