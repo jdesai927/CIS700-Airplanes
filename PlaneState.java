@@ -1,21 +1,25 @@
 package airplane.g5;
 import java.util.ArrayList;
-
+import airplane.g5.Trajectory;
 import airplane.sim.Plane;
 
 public class PlaneState
 {
+ Plane plane;
+ Trajectory path;
+	  
   public PlaneState(Plane p)
   {
     plane = p;
   }
+  
 
   // copy constructor
   public PlaneState(PlaneState planeState)
   {
       this(planeState.plane);
       if (planeState.path != null)
-        this.path = new Trajectory(planeState.path);
+      this.path = new Trajectory(planeState.path);
       this.state = planeState.state;
       this.bearingOrig = planeState.bearingOrig;
       this.landingLock = planeState.landingLock;
@@ -25,8 +29,7 @@ public class PlaneState
         this.simulationTrajectory = new Trajectory(planeState.simulationTrajectory);
   }
   
-  Plane plane;
-  ArrayList<Trajectory> path;
+
 
   // states
   public enum States
@@ -41,7 +44,7 @@ public class PlaneState
   Zone currentZone;
   Trajectory simulationTrajectory;
  
-  public void setPath(ArrayList<Trajectory> t) {
+  public void setPath(Trajectory t) {
 	  path = t;
   }
   
