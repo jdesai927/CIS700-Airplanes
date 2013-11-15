@@ -21,6 +21,16 @@ public class Vector
     x = (float) point.getX();
     y = (float) point.getY();
   }
+  public Vector(double angle)
+  {
+    double xCoord = 1;
+    double yCoord = 0;
+    angle = Math.toRadians(angle);
+    double cos = Math.cos(angle);
+    double sin = Math.sin(angle);
+    x = xCoord*cos - yCoord*sin;
+    y = xCoord*sin + yCoord*cos;
+  }
   public void normalize()
   {
     float vectorLength = length();
