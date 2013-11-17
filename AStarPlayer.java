@@ -39,6 +39,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double SAFE_SIM_DIST = 7;
   private static final float AIRPORT_ZONE_RADIUS = 1;
   private static final int CRITICAL_ROUTE_TRAFFIC = 5;
+  private static final int CRITICAL_WAYPOINT_TRAFFIC = 10;
   static final double WAYPOINT_ZONE_RADIUS = 7;
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
 
@@ -219,11 +220,27 @@ public class AStarPlayer  extends airplane.sim.Player
                 visibilityMap.clear();
                 for (Route flow : currentFlowRoutes)
                 {
-                  addWaypoint(flow.waypoint1);
-                  addWaypoint(flow.waypoint2);
+                  // apply pruning on busy waypoints
+                  if (flow.waypoint1.currentTraffic < CRITICAL_WAYPOINT_TRAFFIC)
+                    addWaypoint(flow.waypoint1);
+                  if (flow.waypoint2.currentTraffic < CRITICAL_WAYPOINT_TRAFFIC)
+                    addWaypoint(flow.waypoint2);
                 }
                 // calculate A* path
                 ArrayList<Waypoint> path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
+                if (path == null) // recomute path without pruning
+                {
+                  // update current waypoints
+                  waypointSet.clear();
+                  visibilityMap.clear();
+                  for (Route flow : currentFlowRoutes)
+                  {
+                    addWaypoint(flow.waypoint1);
+                    addWaypoint(flow.waypoint2);
+                  }
+                  // calculate A* path
+                  path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
+                }
                 // simulate trajectory
                 if (path != null)
                 {
@@ -250,6 +267,12 @@ public class AStarPlayer  extends airplane.sim.Player
                     {
                       Line2D newWall = new Line2D.Double(wall.getP1(), wall.getP2());
                       aStarWalls.add(newWall);
+                    }
+                    // update traffic on waypoints in-between source-dest
+                    for (Waypoint waypoint : path)
+                    {
+                      if (waypoint != path.get(0) && waypoint != path.get(path.size() - 1))
+                        waypoint.currentTraffic++;
                     }
                     break;
                   }
@@ -611,6 +634,14 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           planeState.landed = true;
           planeState.route.currentTraffic--;
+          if (planeState.path != null)
+          {
+            for (Waypoint waypoint : planeState.path)
+            {
+              if (waypoint != planeState.path.get(0) && waypoint != planeState.path.get(planeState.path.size() - 1))
+                waypoint.currentTraffic--;
+            }
+          }
         }
         flyingPlanes.remove(p);
       }

@@ -61,4 +61,5 @@ public class Waypoint
   public double fScore = -1;
   public double currentSourceDistance = -1;
   public double storedSourceDistance = -1;
+  public double currentTraffic = 0;
 }
