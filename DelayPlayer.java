@@ -86,44 +86,6 @@ public class DelayPlayer  extends airplane.sim.Player {
 		return depart;
 	}
 	
-	private boolean canDepart(int planeId, int round, ArrayList<Plane> planes) {
-		boolean canDepart = true;
-		SimulationResult result = startSimulation(planes, round);
-		
-		if (result.getReason() == SimulationResult.TOO_CLOSE) {
-			ArrayList<Plane> simPlanes = result.getPlanes();
-			
-			// find which planes are too close
-			for (Plane plane1: simPlanes) {
-				Point2D.Double p1 = plane1.getLocation(); 
-				for (Plane plane2: simPlanes) {
-					Point2D.Double p2 = plane2.getLocation();
-					if (plane1.id != plane2.id && p1.distance(p2) <= 5) {
-						
-						// the current plane will collide with a currently flying plane if it departs
-						if (plane1.id == planeId) {
-							if (departedPlanes.contains(plane2.id)) {
-								return false;
-							}
-						}
-						
-						else if (plane2.id == planeId) {
-							if (departedPlanes.contains(plane1.id)) {
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-		
-		else if (!result.isSuccess()) {
-			logger.info("COULDN'T DEPART BECAUSE " + reasonToString(result.getReason()));
-			canDepart = false;
-		}
-		
-		return canDepart;
-	}
 	
 	/*
 	 * This is called at the beginning of a new simulation. 
