@@ -34,6 +34,7 @@ public class PlaneState
       landed = planeState.landed;
       pathIter = planeState.pathIter;
       orbitDirection = planeState.orbitDirection;
+      zoneRadius = planeState.zoneRadius;
       // do not deep copy route
       route = planeState.route;
       // do not deep copy path
@@ -63,5 +64,6 @@ public class PlaneState
   int pathIter = 1; // source waypoint located at 0
   Set<Line2D> walls;
   int orbitDirection = 1;
+  double zoneRadius = AStarPlayer.WAYPOINT_ZONE_RADIUS;
   
 }

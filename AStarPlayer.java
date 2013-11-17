@@ -39,7 +39,8 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double SAFE_SIM_DIST = 7;
   private static final float AIRPORT_ZONE_RADIUS = 1;
   private static final int CRITICAL_ROUTE_TRAFFIC = 5;
-  private static final double WAYPOINT_ZONE_RADIUS = 7;
+  static final double WAYPOINT_ZONE_RADIUS = 7;
+  private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
 
   private boolean testDepart = false;
 
@@ -92,6 +93,7 @@ public class AStarPlayer  extends airplane.sim.Player
     
     ArrayList<Waypoint> aStarPath = new ArrayList<Waypoint> ();
     HashSet<Line2D> aStarWalls = new HashSet<Line2D> ();
+    double aStarZoneRadius = WAYPOINT_ZONE_RADIUS;
     boolean upgradeToAStar = false;
 
     // refresh simulator state
@@ -230,6 +232,10 @@ public class AStarPlayer  extends airplane.sim.Player
                   planeStateMapSim.get(planeId).path = path;
                   planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
                   planeStateMapSim.get(planeId).walls = walls;
+                  if (path.size() <= 2) // create landing zone
+                  {
+                    planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
+                  }
 
                   result = startSimulation(planesToSim, round);
                   if (result.getReason() == SimulationResult.NORMAL)
@@ -237,6 +243,8 @@ public class AStarPlayer  extends airplane.sim.Player
                     depart = true;
                     upgradeToAStar = true;
                     aStarPath = path;
+                    aStarZoneRadius = planeStateMapSim.get(planeId).zoneRadius;
+
                     // make copy of walls
                     for (Line2D wall : walls)
                     {
@@ -277,6 +285,7 @@ public class AStarPlayer  extends airplane.sim.Player
       planeState.state = PlaneState.States.ORBIT_STATE;
       planeState.path = aStarPath;
       planeState.walls = aStarWalls;
+      planeState.zoneRadius = aStarZoneRadius;
     }
     else
     {
@@ -435,26 +444,30 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           // check if next waypoint visible
           Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-          Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
-          double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
-          double deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
-          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (WAYPOINT_ZONE_RADIUS + .1))
+          double deltaBearing = 0;
+          if (planeState.path.size() > 2)
+          {
+            Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
+            double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
+            deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
+          }
+          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1))
           {
             planeState.pathIter++;
-            wpPoint = planeState.path.get(planeState.pathIter).point;
-            if (planeState.pathIter == planeState.path.size() - 1) // last waypoint
+            if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
             {
               bearings[i] = spiralOrbit(planeState, p.getDestination());
             }
             else // join next waypoint
             {
-              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, planeState.orbitDirection);
+              wpPoint = planeState.path.get(planeState.pathIter).point;
+              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
             }
           }
           else
           {
             // Move in orbital tangent towards waypoint zone
-            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, planeState.orbitDirection);
+            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
           }
         }
       }
@@ -476,10 +489,10 @@ public class AStarPlayer  extends airplane.sim.Player
           {
             // Move in orbital tangent towards first waypoint
             Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-            double bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, 1);
+            double bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, 1);
             if(checkFlowIntersection(planeState, wpPoint, bearing))
             {
-              bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, -1);
+              bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, -1);
               planeState.orbitDirection = -1;
             }
             bearings[i] = bearing;
@@ -531,26 +544,30 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           // check if next waypoint visible
           Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-          Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
-          double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
-          double deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
-          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (WAYPOINT_ZONE_RADIUS + .1))
+          double deltaBearing = 0;
+          if (planeState.path.size() > 2)
+          {
+            Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
+            double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
+            deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
+          }
+          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1))
           {
             planeState.pathIter++;
-            wpPoint = planeState.path.get(planeState.pathIter).point;
-            if (planeState.pathIter == planeState.path.size() - 1) // last waypoint
+            if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
             {
               bearings[i] = spiralOrbit(planeState, p.getDestination());
             }
             else // join next waypoint
             {
-              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, planeState.orbitDirection);
+              wpPoint = planeState.path.get(planeState.pathIter).point;
+              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
             }
           }
           else
           {
             // Move in orbital tangent towards waypoint zone
-            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, planeState.orbitDirection);
+            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
           }
         }
       }
@@ -572,10 +589,10 @@ public class AStarPlayer  extends airplane.sim.Player
           {
             // Move in orbital tangent towards first waypoint
             Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-            double bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, 1);
+            double bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, 1);
             if(checkFlowIntersection(planeState, wpPoint, bearing))
             {
-              bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, WAYPOINT_ZONE_RADIUS, -1);
+              bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, -1);
               planeState.orbitDirection = -1;
             }
             bearings[i] = bearing;
