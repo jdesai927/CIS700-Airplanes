@@ -39,7 +39,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double SAFE_SIM_DIST = 7;
   private static final float AIRPORT_ZONE_RADIUS = 1;
   private static final int CRITICAL_ROUTE_TRAFFIC = 5;
-  private static final double WAYPOINT_ZONE_RADIUS = 10;
+  private static final double WAYPOINT_ZONE_RADIUS = 7;
 
   private boolean testDepart = false;
 
@@ -228,13 +228,15 @@ public class AStarPlayer  extends airplane.sim.Player
                   // refresh simulator state
                   refreshSimState();
                   planeStateMapSim.get(planeId).path = path;
-                  aStarPath = path;
+                  planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+                  planeStateMapSim.get(planeId).walls = walls;
 
                   result = startSimulation(planesToSim, round);
-                  //if (result.getReason() == SimulationResult.NORMAL)
+                  if (result.getReason() == SimulationResult.NORMAL)
                   {
                     depart = true;
                     upgradeToAStar = true;
+                    aStarPath = path;
                     // make copy of walls
                     for (Line2D wall : walls)
                     {
