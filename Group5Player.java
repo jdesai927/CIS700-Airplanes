@@ -282,7 +282,7 @@ public class Group5Player extends airplane.sim.Player
     tangent = Vector.addVectors(centerVec, radial);
     Vector locationVector = new Vector(plane.getLocation());
     Vector tangentAbsolute = Vector.addVectors(locationVector, tangent);
-    planeState.path = new Trajectory(new Line2D.Double(plane.getLocation(), tangentAbsolute.getPoint()));
+    //planeState.path = new Trajectory(new Line2D.Double(plane.getLocation(), tangentAbsolute.getPoint()));
     
 
     return bearing;
@@ -298,7 +298,7 @@ public class Group5Player extends airplane.sim.Player
     planeState.state = PlaneState.States.SPIRAL_STATE;
     Plane plane = planeState.plane;
     Line2D path = new Line2D.Double(plane.getLocation(), destination);
-    planeState.path = new Trajectory(path);
+    //planeState.path = new Trajectory(path);
     double bearingDest = calculateBearing(plane.getLocation(), destination);
     if (planeState.bearingOrig == WAITING)
         return bearingDest;
