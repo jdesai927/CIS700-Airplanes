@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -220,10 +219,25 @@ public class AStarPlayer  extends airplane.sim.Player
                 visibilityMap.clear();
                 for (Route flow : currentFlowRoutes)
                 {
+                  // initialize waypoint traffic maps if null
+                  if (flow.waypoint1.currentTrafficMap.get(planeState.route) == null)
+                  {
+                    flow.waypoint1.currentTrafficMap.put(planeState.route, new HashMap<Integer, Integer> ());
+                    Map<Integer, Integer> flowTraffic = flow.waypoint1.currentTrafficMap.get(planeState.route);
+                    flowTraffic.put(planeState.routeDirection, 0);
+                    flowTraffic.put(-planeState.routeDirection, 0);
+                  }
+                  if (flow.waypoint2.currentTrafficMap.get(planeState.route) == null)
+                  {
+                    flow.waypoint2.currentTrafficMap.put(planeState.route, new HashMap<Integer, Integer> ());
+                    Map<Integer, Integer> flowTraffic = flow.waypoint2.currentTrafficMap.get(planeState.route);
+                    flowTraffic.put(planeState.routeDirection, 0);
+                    flowTraffic.put(-planeState.routeDirection, 0);
+                  }
                   // apply pruning on busy waypoints
-                  if (flow.waypoint1.currentTraffic < CRITICAL_WAYPOINT_TRAFFIC)
+                  if (flow.waypoint1.currentTraffic - flow.waypoint1.currentTrafficMap.get(planeState.route).get(planeState.routeDirection) < CRITICAL_WAYPOINT_TRAFFIC)
                     addWaypoint(flow.waypoint1);
-                  if (flow.waypoint2.currentTraffic < CRITICAL_WAYPOINT_TRAFFIC)
+                  if (flow.waypoint2.currentTraffic - flow.waypoint2.currentTrafficMap.get(planeState.route).get(planeState.routeDirection) < CRITICAL_WAYPOINT_TRAFFIC)
                     addWaypoint(flow.waypoint2);
                 }
                 // calculate A* path
@@ -272,7 +286,21 @@ public class AStarPlayer  extends airplane.sim.Player
                     for (Waypoint waypoint : path)
                     {
                       if (waypoint != path.get(0) && waypoint != path.get(path.size() - 1))
+                      {
+                        // initialize waypoint traffic map if null
+                        if (waypoint.currentTrafficMap.get(planeState.route) == null)
+                        {
+                          waypoint.currentTrafficMap.put(planeState.route, new HashMap<Integer, Integer> ());
+                          Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
+                          flowTraffic.put(planeState.routeDirection, 0);
+                          flowTraffic.put(-planeState.routeDirection, 0);
+                        }
+                        Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
+                        int trafficValue = flowTraffic.get(planeState.routeDirection);
+                        trafficValue++;
+                        flowTraffic.put(planeState.routeDirection, trafficValue);
                         waypoint.currentTraffic++;
+                      }
                     }
                     break;
                   }
@@ -359,6 +387,7 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       Point2D p1 = planeState.plane.getLocation();
       Point2D p2 = planeState.plane.getDestination();
+      planeState.routeDirection = Route.FORWARD;
       // check if this route can be clubbed with an existing route
       Route route = new Route(new Waypoint(p1), new Waypoint(p2));
       for (Route routeMerge : routeSet)
@@ -369,12 +398,18 @@ public class AStarPlayer  extends airplane.sim.Player
         if (wpP1.distance(p1) < AIRPORT_ZONE_RADIUS)
         {
           if (wpP2.distance(p2) < AIRPORT_ZONE_RADIUS)
+          {
+            planeState.routeDirection = Route.FORWARD;
             route = routeMerge;
+          }
         }
         if (wpP1.distance(p2) < AIRPORT_ZONE_RADIUS)
         {
           if (wpP2.distance(p1) < AIRPORT_ZONE_RADIUS)
+          {
+            planeState.routeDirection = Route.BACKWARD;
             route = routeMerge;
+          }
         }
       }
       routeSet.add(route);
@@ -639,7 +674,13 @@ public class AStarPlayer  extends airplane.sim.Player
             for (Waypoint waypoint : planeState.path)
             {
               if (waypoint != planeState.path.get(0) && waypoint != planeState.path.get(planeState.path.size() - 1))
+              {
+                Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
+                int trafficValue = flowTraffic.get(planeState.routeDirection);
+                trafficValue++;
+                flowTraffic.put(planeState.routeDirection, trafficValue);
                 waypoint.currentTraffic--;
+              }
             }
           }
         }

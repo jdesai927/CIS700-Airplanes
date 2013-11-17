@@ -1,4 +1,7 @@
 package airplane.g5;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 import java.awt.geom.Point2D;
 
@@ -61,5 +64,6 @@ public class Waypoint
   public double fScore = -1;
   public double currentSourceDistance = -1;
   public double storedSourceDistance = -1;
-  public double currentTraffic = 0;
+  Map<Route, Map<Integer, Integer> > currentTrafficMap = new HashMap<Route, Map<Integer, Integer> > ();
+  public int currentTraffic = 0;
 }

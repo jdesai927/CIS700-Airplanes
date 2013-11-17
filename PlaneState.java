@@ -35,6 +35,7 @@ public class PlaneState
       pathIter = planeState.pathIter;
       orbitDirection = planeState.orbitDirection;
       zoneRadius = planeState.zoneRadius;
+      routeDirection = planeState.routeDirection;
       // do not deep copy route
       route = planeState.route;
       // do not deep copy path
@@ -65,5 +66,6 @@ public class PlaneState
   Set<Line2D> walls;
   int orbitDirection = 1;
   double zoneRadius = AStarPlayer.WAYPOINT_ZONE_RADIUS;
+  int routeDirection = Route.FORWARD;
   
 }
