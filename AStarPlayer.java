@@ -41,6 +41,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final int CRITICAL_WAYPOINT_TRAFFIC = 10;
   static final double WAYPOINT_ZONE_RADIUS = 7;
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
+  private static final double OPAQUE_MARGIN = 20;
 
   private boolean testDepart = false;
 
@@ -209,11 +210,7 @@ public class AStarPlayer  extends airplane.sim.Player
                   }
                 }
                 // update walls
-                walls.clear();
-                for (Route flow : currentFlowRoutes)
-                {
-                  walls.add(new Line2D.Double(flow.waypoint1.point, flow.waypoint2.point));
-                }
+                updateWalls(currentFlowRoutes);
                 // update current waypoints
                 waypointSet.clear();
                 visibilityMap.clear();
@@ -269,6 +266,46 @@ public class AStarPlayer  extends airplane.sim.Player
                   }
 
                   result = startSimulation(planesToSim, round);
+                  if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
+                  {
+                    ArrayList<Plane> simPlanes2 = result.getPlanes();
+                    Route collideRoute = planeState.route;
+                    PlaneState planeStateCollide = planeState;
+                    for (Plane simPlane21: simPlanes2)
+                    {
+                      simP1 = simPlane21.getLocation();
+                      if (simPlane21.id == planeId)
+                      {
+                        for (Plane simPlane22: simPlanes2)
+                        {
+                          simP2 = simPlane22.getLocation();
+                          if (simPlane21.id != simPlane22.id && simP1.distance(simP2) <= 5)
+                          {
+                            planeStateCollide = planeStateMap.get(simPlane22.id);
+                            collideRoute = planeStateCollide.route;
+                          }
+                        }
+                      }
+                    }
+                    PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
+                    // update current waypoints
+                    if (collideRoute != planeState.route || (collideRoute == planeState.route && planeState.routeDirection != planeStateCollide.routeDirection))
+                      removeWaypoint(simPlaneState1.path.get(simPlaneState1.pathIter));
+                    path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
+                    if (path != null)
+                    {
+                      // refresh simulator state
+                      refreshSimState();
+                      planeStateMapSim.get(planeId).path = path;
+                      planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+                      planeStateMapSim.get(planeId).walls = walls;
+                      if (path.size() <= 2) // create landing zone
+                      {
+                        planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
+                      }
+                      result = startSimulation(planesToSim, round);
+                    }
+                  }
                   if (result.getReason() == SimulationResult.NORMAL)
                   {
                     depart = true;
@@ -317,7 +354,7 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       //logger.info("COULDN'T DEPART BECAUSE " + reasonToString(result.getReason()));
       depart = false;
-      /*if (upgradeToAStar && !testDepart)
+      /*if (result.getReason() == SimulationResult.STOPPED && !testDepart)
       {
         testDepart = true;
         depart = true;
@@ -353,6 +390,15 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       PlaneState planeStateSim = new PlaneState(planeState);
       planeStateMapSim.add(planeStateSim);
+    }
+  }
+
+  public void updateWalls(Set<Route> currentFlowRoutes)
+  {
+    walls.clear();
+    for (Route flow : currentFlowRoutes)
+    {
+      walls.add(new Line2D.Double(flow.waypoint1.point, flow.waypoint2.point));
     }
   }
 
@@ -473,6 +519,10 @@ public class AStarPlayer  extends airplane.sim.Player
   @Override
   protected double[] simulateUpdate(ArrayList<Plane> planes, int round, double[] bearings)
   {
+    /*if (round > 10000)
+    {
+      stopSimulation();
+    }*/
     for (int i = 0; i < planes.size(); i++)
     {
       Plane plane = planes.get(i);
@@ -514,6 +564,7 @@ public class AStarPlayer  extends airplane.sim.Player
             planeState.pathIter++;
             if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
             {
+              planeState.pathIter = planeState.path.size() - 1;
               bearings[i] = spiralOrbit(planeState, p.getDestination());
             }
             else // join next waypoint
@@ -614,6 +665,7 @@ public class AStarPlayer  extends airplane.sim.Player
             planeState.pathIter++;
             if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
             {
+              planeState.pathIter = planeState.path.size() - 1;
               bearings[i] = spiralOrbit(planeState, p.getDestination());
             }
             else // join next waypoint
@@ -636,7 +688,7 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
-            bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+            bearings[i] = straightLinePath(planeState);
           }
           else if (planeState.state == PlaneState.States.COLLISION_STATE)
           {
@@ -718,6 +770,18 @@ public class AStarPlayer  extends airplane.sim.Player
       return false;
   }
 
+  public double straightLinePath(PlaneState planeState)
+  {
+    planeState.state = PlaneState.States.NULL_STATE;
+    double bearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
+    // set path
+    ArrayList<Waypoint> path = new ArrayList<Waypoint> ();
+    path.add(0, new Waypoint(planeState.plane.getLocation()));
+    path.add(1, new Waypoint(planeState.plane.getDestination()));
+    planeState.path = path;
+    return bearing;
+  }
+
   public double joinOrbit(PlaneState planeState, Point2D.Double center, double radius, int direction)
   {
     planeState.state = PlaneState.States.ORBIT_STATE;
@@ -734,6 +798,11 @@ public class AStarPlayer  extends airplane.sim.Player
   public double collisionOrbit(PlaneState planeState, Point2D.Double destination)
   {
     planeState.state = PlaneState.States.COLLISION_STATE;
+    // set path
+    ArrayList<Waypoint> path = new ArrayList<Waypoint> ();
+    path.add(0, new Waypoint(planeState.plane.getLocation()));
+    path.add(1, new Waypoint(planeState.plane.getDestination()));
+    planeState.path = path;
     return reachTarget(planeState, destination);
   }
 
@@ -773,12 +842,18 @@ public class AStarPlayer  extends airplane.sim.Player
     double dist = plane.getLocation().distance(center);
     double sin = radius / dist;
     if (sin > 1) // inside the circle
-      return -1;
-    double radians = Math.asin(sin);
-    double relativeDegree = Math.toDegrees(radians);
-    double referenceDegree = calculateBearing(plane.getLocation(), (Point2D.Double)center);
-    double degree = addBearings(referenceDegree, direction * relativeDegree);
-    return degree;
+    {
+      double radialBearing = calculateBearing((Point2D.Double)center, plane.getLocation());
+      return radialBearing;
+    }
+    else
+    {
+      double radians = Math.asin(sin);
+      double relativeDegree = Math.toDegrees(radians);
+      double referenceDegree = calculateBearing(plane.getLocation(), (Point2D.Double)center);
+      double degree = addBearings(referenceDegree, direction * relativeDegree);
+      return degree;
+    }
   }
 
   public double addBearings(double bearingOrig, double bearingDelta)
@@ -807,6 +882,12 @@ public class AStarPlayer  extends airplane.sim.Player
   {
     addToVisibilityMap(waypoint);
     waypointSet.add(waypoint);
+  }
+
+  void removeWaypoint(Waypoint waypoint)
+  {
+    removeFromVisibilityMap(waypoint);
+    waypointSet.remove(waypoint);
   }
 
   protected boolean isInLineOfSight(double x, double y, double newX, double newY)
@@ -914,6 +995,20 @@ public class AStarPlayer  extends airplane.sim.Player
         waypointSet1.add(waypoint2);
         waypointSet2.add(waypoint1);
       }
+    }
+  }
+
+  private void removeFromVisibilityMap(Waypoint waypoint1)
+  {
+    Set<Waypoint> waypointSet1 = visibilityMap.get(waypoint1);
+    if (waypointSet1 != null)
+    {
+      for (Waypoint waypoint2 : waypointSet1)
+      {
+        Set<Waypoint> waypointSet2 = visibilityMap.get(waypoint2);
+        waypointSet2.remove(waypoint1);
+      }
+      visibilityMap.remove(waypoint1);
     }
   }
 
