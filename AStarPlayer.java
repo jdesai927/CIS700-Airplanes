@@ -273,13 +273,13 @@ public class AStarPlayer  extends airplane.sim.Player
               result = startSimulation(planesToSim, round);
             }
           }
-          /*if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
+          if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
           {
             PlaneState collisionPlaneState2 = getCollisionPlaneState(result, planeId);
             Route collideRoute = collisionPlaneState2.route;
             PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
             // update current waypoints
-            if (collideRoute != planeState.route || (collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection))
+            if (collideRoute != planeState.route)
               removeWaypoint(simPlaneState1.path.get(simPlaneState1.pathIter));
             path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
             if (path != null)
@@ -295,7 +295,7 @@ public class AStarPlayer  extends airplane.sim.Player
               }
               result = startSimulation(planesToSim, round);
             }
-          }*/
+          }
           if (result.getReason() == SimulationResult.NORMAL)
           {
             depart = true;
