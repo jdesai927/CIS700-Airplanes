@@ -266,7 +266,7 @@ public class AStarPlayer  extends airplane.sim.Player
                   }
 
                   result = startSimulation(planesToSim, round);
-                  if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
+                  /*if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
                   {
                     ArrayList<Plane> simPlanes2 = result.getPlanes();
                     Route collideRoute = planeState.route;
@@ -305,7 +305,7 @@ public class AStarPlayer  extends airplane.sim.Player
                       }
                       result = startSimulation(planesToSim, round);
                     }
-                  }
+                  }*/
                   if (result.getReason() == SimulationResult.NORMAL)
                   {
                     depart = true;
@@ -395,11 +395,36 @@ public class AStarPlayer  extends airplane.sim.Player
 
   public void updateWalls(Set<Route> currentFlowRoutes)
   {
+    
     walls.clear();
     for (Route flow : currentFlowRoutes)
     {
       walls.add(new Line2D.Double(flow.waypoint1.point, flow.waypoint2.point));
     }
+    
+    // iterate over each plane in the air, check route traffic, add walls along paths  
+    /*Set<Route> consideredRoutes = new HashSet<Route> ();
+    for (PlaneState planeState: planeStateMap)
+    {
+      Route route = planeState.route;
+      if (!consideredRoutes.contains(route))
+      {
+        consideredRoutes.add(route);
+        if (route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC)
+        {
+          if (planeState.plane.getBearing() >= 0)
+          {
+            for (int i = 0; i < planeState.path.size() - 1; i++)
+            {
+              Waypoint wp1 = planeState.path.get(i);
+              Waypoint wp2 = planeState.path.get(i + 1);
+              Line2D wall = new Line2D.Double(wp1.point, wp2.point);
+              walls.add(wall);
+            }
+          }
+        }
+      }
+    }*/
   }
 
   /*
