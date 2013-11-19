@@ -27,7 +27,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private List<PlaneState> planeStateMap;
   private List<PlaneState> planeStateMapSim;
 
-  private HashSet<Integer> departedPlanes = new HashSet<Integer>();
+  private ArrayList<Plane> sortedPlanes = new ArrayList<Plane>();
   private ArrayList<Plane> flyingPlanes = new ArrayList<Plane>();
   private Set<Route> routeSet = new HashSet<Route>();
 
@@ -340,6 +340,11 @@ public class AStarPlayer  extends airplane.sim.Player
 
     planeStateMap = new ArrayList<PlaneState> ();
     planeStateMapSim = new ArrayList<PlaneState> ();
+    
+    sortedPlanes.addAll(planes);
+    Collections.sort(sortedPlanes, INCREASING_DEPT);
+    Collections.sort(sortedPlanes, DECREASING_DIST);
+    
     for (int i = 0; i < planes.size(); i++)
     {
       Plane plane = planes.get(i);
@@ -422,15 +427,27 @@ public class AStarPlayer  extends airplane.sim.Player
       }
     }
   };
-
-
-  private void dispatchNextPlane()
+  
+  private Comparator<Plane> DECREASING_DIST = new Comparator<Plane>()
   {
-//	if (departureIds.size() > 1) {
-//		departureIds.remove(0);
-//		flyingPlane = departureIds.get(0);
-//	}
-  }
+    public int compare(Plane p1, Plane p2)
+    {
+      double dist1 = p1.getLocation().distance(p1.getDestination());
+      double dist2 = p2.getLocation().distance(p2.getDestination());
+      if (dist1 < dist2)
+      {
+        return 1;
+      }
+      else if (dist2 < dist1)
+      {
+        return -1;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+  };
 
   /*
    * This is used when you're running your own simulation
@@ -539,14 +556,16 @@ public class AStarPlayer  extends airplane.sim.Player
     refreshSimState();
     for (int i = 0; i < planes.size(); i++)
     {
-      Plane plane = planes.get(i);
+//      Plane plane = planes.get(i);
+      Plane plane = sortedPlanes.get(i);
       planeStateMap.set(planeStateMapSim.get(plane.id).plane.id, planeStateMapSim.get(plane.id));
     }
     for (int i = 0; i < planes.size(); i++)
     {
-      Plane p = planes.get(i);
+//      Plane p = planes.get(i);
+      Plane p = sortedPlanes.get(i);
       PlaneState planeState = planeStateMap.get(p.id);
-      if (departedPlanes.contains(p.id) && p.getBearing() != -2)
+      if (flyingPlanes.contains(p) && p.getBearing() != -2)
       {
         if (planeState.state == PlaneState.States.NULL_STATE)
         {
@@ -561,7 +580,8 @@ public class AStarPlayer  extends airplane.sim.Player
         else if (planeState.state == PlaneState.States.SPIRAL_STATE)
         {
           // move in spiral pattern towards target
-          bearings[i] = spiralOrbit(planeState, p.getDestination());
+//          bearings[i] = spiralOrbit(planeState, p.getDestination());
+        	bearings[p.id] = spiralOrbit(planeState, p.getDestination());
         }
         else if (planeState.state == PlaneState.States.ORBIT_STATE)
         {
@@ -579,18 +599,21 @@ public class AStarPlayer  extends airplane.sim.Player
             planeState.pathIter++;
             if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
             {
-              bearings[i] = spiralOrbit(planeState, p.getDestination());
+//              bearings[i] = spiralOrbit(planeState, p.getDestination());
+            	bearings[p.id] = spiralOrbit(planeState, p.getDestination());
             }
             else // join next waypoint
             {
               wpPoint = planeState.path.get(planeState.pathIter).point;
-              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+//              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+              bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
             }
           }
           else
           {
             // Move in orbital tangent towards waypoint zone
-            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+//            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+            bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
           }
         }
       }
@@ -601,12 +624,14 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
-            bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+//            bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+            bearings[p.id] = calculateBearing(p.getLocation(), p.getDestination());
           }
           else if (planeState.state == PlaneState.States.COLLISION_STATE)
           {
             // Move in orbital tangent
-            bearings[i] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
+//            bearings[i] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
+        	  bearings[p.id] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
           }
           else if (planeState.state == PlaneState.States.ORBIT_STATE)
           {
@@ -618,9 +643,9 @@ public class AStarPlayer  extends airplane.sim.Player
               bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, -1);
               planeState.orbitDirection = -1;
             }
-            bearings[i] = bearing;
+//            bearings[i] = bearing;
+            bearings[p.id] = bearing;
           }
-          departedPlanes.add(i);
           planeState.route.currentTraffic++;
           if (!flyingPlanes.contains(p))
           {
