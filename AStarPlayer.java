@@ -36,7 +36,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double CRITICAL_COLLISION_ZONE_ANGLE = 10;
   private static final float COLLISION_ZONE_RADIUS = 5;
   private static final double SAFE_SIM_DIST = 7;
-  private static final float AIRPORT_ZONE_RADIUS = 1;
+  private static final float AIRPORT_ZONE_RADIUS = 5;
   private static final int CRITICAL_ROUTE_TRAFFIC = 5;
   private static final int CRITICAL_WAYPOINT_TRAFFIC = 10;
   static final double WAYPOINT_ZONE_RADIUS = 7;
@@ -46,6 +46,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double OPAQUE_MARGIN = 20;
 
   private boolean testDepart = false;
+  private int simStartRound = 0;
 
   @Override
   public String getName()
@@ -86,6 +87,7 @@ public class AStarPlayer  extends airplane.sim.Player
 
   private boolean depart(int planeId, int round, ArrayList<Plane> planes)
   {
+    simStartRound = round;
     boolean depart = true;
     ArrayList<Plane> planesToSim = new ArrayList<Plane>();
     planesToSim.addAll(flyingPlanes);
@@ -297,7 +299,7 @@ public class AStarPlayer  extends airplane.sim.Player
               result = startSimulation(planesToSim, round);
             }
           }
-          if (result.getReason() == SimulationResult.NORMAL)
+          if (result.getReason() == SimulationResult.NORMAL /*|| result.getReason() == SimulationResult.STOPPED*/)
           {
             depart = true;
             upgradeToAStar = true;
@@ -335,17 +337,20 @@ public class AStarPlayer  extends airplane.sim.Player
       }
 
     }
-
+    /*if (testDepart)
+    {
+      depart = false;
+    }
     if (!result.isSuccess())
     {
       //logger.info("COULDN'T DEPART BECAUSE " + reasonToString(result.getReason()));
       depart = false;
-      /*if (result.getReason() == SimulationResult.STOPPED && !testDepart)
+      if (result.getReason() == SimulationResult.STOPPED && !testDepart)
       {
         testDepart = true;
         depart = true;
-      }*/
-    }
+      }
+    }*/
 
     if (upgradeToCollision)
     {
@@ -549,10 +554,10 @@ public class AStarPlayer  extends airplane.sim.Player
   @Override
   protected double[] simulateUpdate(ArrayList<Plane> planes, int round, double[] bearings)
   {
-    /*if (round > 10000)
+    if (round - simStartRound > 10000)
     {
       stopSimulation();
-    }*/
+    }
     for (int i = 0; i < planes.size(); i++)
     {
       Plane plane = planes.get(i);
@@ -724,7 +729,7 @@ public class AStarPlayer  extends airplane.sim.Player
         }
       }
 
-      else if (round >= p.getDepartureTime() && p.getBearing() != -2/* && !testDepart*/)
+      else if (round >= p.getDepartureTime() && p.getBearing() != -2)
       {
         if (depart(p.id, round, planes) && p.getBearing() != -2)
         {
