@@ -42,6 +42,7 @@ public class AStarPlayer  extends airplane.sim.Player
   static final double WAYPOINT_ZONE_RADIUS = 7;
   static final double WAYPOINT_ZONE_RADIUS2 = 13;
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
+  private static final double CRITICAL_WAYPOINT_SWITCH_ANGLE = 30;
   private static final double OPAQUE_MARGIN = 20;
 
   private boolean testDepart = false;
@@ -581,14 +582,20 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           // check if next waypoint visible
           Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-          double deltaBearing = 0;
+          double wpBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPoint);
+          boolean switchCond1 = true;
           if (planeState.path.size() > 2)
           {
             Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
-            double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
-            deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
+            double wpNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
+            double wpRelativeBearing = addBearings(wpNextBearing, -wpBearing);
+            double deltaBearing = addBearings(wpNextBearing, -p.getBearing());
+            switchCond1 = deltaBearing <= CRITICAL_WAYPOINT_SWITCH_ANGLE || 
+                          deltaBearing >= 360 - CRITICAL_WAYPOINT_SWITCH_ANGLE ||
+                          (wpRelativeBearing >= 90 && wpRelativeBearing <= 270);
           }
-          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1))
+          boolean switchCond2 = p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1);
+          if (switchCond1 && switchCond2)
           {
             planeState.pathIter++;
             if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
@@ -682,14 +689,20 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           // check if next waypoint visible
           Point2D wpPoint = planeState.path.get(planeState.pathIter).point;
-          double deltaBearing = 0;
+          double wpBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPoint);
+          boolean switchCond1 = true;
           if (planeState.path.size() > 2)
           {
             Point2D wpPointNext = planeState.path.get(planeState.pathIter + 1).point;
-            double wpPointNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
-            deltaBearing = addBearings(wpPointNextBearing, -p.getBearing());
+            double wpNextBearing = calculateBearing(p.getLocation(), (Point2D.Double) wpPointNext);
+            double wpRelativeBearing = addBearings(wpNextBearing, -wpBearing);
+            double deltaBearing = addBearings(wpNextBearing, -p.getBearing());
+            switchCond1 = deltaBearing <= CRITICAL_WAYPOINT_SWITCH_ANGLE || 
+                          deltaBearing >= 360 - CRITICAL_WAYPOINT_SWITCH_ANGLE ||
+                          (wpRelativeBearing >= 90 && wpRelativeBearing <= 270);
           }
-          if ((deltaBearing <= 10 || deltaBearing >= 350) && p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1))
+          boolean switchCond2 = p.getLocation().distance(wpPoint) <= (planeState.zoneRadius + .1);
+          if (switchCond1 && switchCond2)
           {
             planeState.pathIter++;
             if (planeState.pathIter >= planeState.path.size() - 1) // last waypoint
