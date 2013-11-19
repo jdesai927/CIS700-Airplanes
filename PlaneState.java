@@ -36,6 +36,7 @@ public class PlaneState
       orbitDirection = planeState.orbitDirection;
       zoneRadius = planeState.zoneRadius;
       routeDirection = planeState.routeDirection;
+      takeoffAngle = planeState.takeoffAngle;
       // do not deep copy route
       route = planeState.route;
       // do not deep copy path
@@ -67,5 +68,6 @@ public class PlaneState
   int orbitDirection = 1;
   double zoneRadius = AStarPlayer.WAYPOINT_ZONE_RADIUS;
   int routeDirection = Route.FORWARD;
+  double takeoffAngle = -1;
   
 }
