@@ -92,7 +92,7 @@ public class AStarPlayer  extends airplane.sim.Player
   {
     simStartRound = round;
     simPlaneId = planeId;
-    boolean depart = true;
+    boolean depart = false;
     ArrayList<Plane> planesToSim = new ArrayList<Plane>();
     planesToSim.addAll(flyingPlanes);
     planesToSim.add(planes.get(planeId));
@@ -112,10 +112,12 @@ public class AStarPlayer  extends airplane.sim.Player
     // first try straight line path
     planeStateMapSim.get(planeId).state = PlaneState.States.NULL_STATE;
     SimulationResult result = startSimulation(planesToSim, round);
+    if (result.getReason() == SimulationResult.NORMAL)
+      depart = true;
     SimulationResult resultBackup = result;
     PlaneState planeState = planeStateMap.get(planeId);
 
-    /*if (round >= 420)
+    /*if (round >= 20 && (planeId == 14 || planeId == 14))
     {
       logger.info("round " + round);
     }*/
@@ -133,22 +135,17 @@ public class AStarPlayer  extends airplane.sim.Player
     if (result.getReason() == SimulationResult.TOO_CLOSE && currentFlowRoutes.size() == 0) // if collision close to source airport, change takeoff angle
     {
       depart = false;
-      PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
-      if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= 5)
+      double bearing = getTakeoffAngle(result, planeId);
+      if (bearing != WAITING)
       {
-        PlaneState simPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
-        if (simPlaneState2.route != simPlaneState1.route || (simPlaneState2.route == simPlaneState1.route && simPlaneState2.routeDirection != simPlaneState1.routeDirection))
+        // refresh simulator state
+        refreshSimState();
+        planeStateMapSim.get(planeId).takeoffAngle = bearing;
+        result = startSimulation(planesToSim, round);
+        if (result.getReason() == SimulationResult.NORMAL)
         {
-          // refresh simulator state
-          double bearing = simPlaneState2.plane.getBearing();
-          refreshSimState();
-          planeStateMapSim.get(planeId).takeoffAngle = bearing;
-          result = startSimulation(planesToSim, round);
-          if (result.getReason() == SimulationResult.NORMAL)
-          {
-            takeoffAngle = bearing;
-            depart = true;
-          }
+          takeoffAngle = bearing;
+          depart = true;
         }
       }
     }
@@ -286,23 +283,44 @@ public class AStarPlayer  extends airplane.sim.Player
           }
 
           result = startSimulation(planesToSim, round);
+          if (result.getReason() == SimulationResult.TOO_CLOSE) // try different takeoff angle if collision near source airport
+          {
+            double tryTakeoffAngle = getTakeoffAngle(result, planeId);
+            if(takeoffAngle != WAITING)
+            {
+              // refresh simulator state
+              refreshSimState();
+              if (path.size() <= 2) // create landing zone
+              {
+                planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
+              }
+              planeStateMapSim.get(planeId).path = path;
+              planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+              planeStateMapSim.get(planeId).walls = walls;
+              planeStateMapSim.get(planeId).takeoffAngle = tryTakeoffAngle;
+              takeoffAngle = tryTakeoffAngle;
+              result = startSimulation(planesToSim, round);
+            }
+          }
           if (result.getReason() == SimulationResult.TOO_CLOSE) // try larger zone radius 
           {
             PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
             Route collideRoute = collisionPlaneState2.route;
             PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
-            if (collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection)
+            if ((collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection) ||
+                (collideRoute != planeState.route))
             {
+              // refresh simulator state
+              refreshSimState();
               if (path.size() <= 2) // create landing zone
               {
                 planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
               }
-              // refresh simulator state
-              refreshSimState();
               planeStateMapSim.get(planeId).zoneRadius = WAYPOINT_ZONE_RADIUS2;
               planeStateMapSim.get(planeId).path = path;
               planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
               planeStateMapSim.get(planeId).walls = walls;
+              planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
               result = startSimulation(planesToSim, round);
             }
           }
@@ -322,6 +340,7 @@ public class AStarPlayer  extends airplane.sim.Player
               planeStateMapSim.get(planeId).path = path;
               planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
               planeStateMapSim.get(planeId).walls = walls;
+              planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
               if (path.size() <= 2) // create landing zone
               {
                 planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
@@ -329,25 +348,6 @@ public class AStarPlayer  extends airplane.sim.Player
               result = startSimulation(planesToSim, round);
             }
           }
-          /*if (result.getReason() == SimulationResult.TOO_CLOSE) // try different takeoff angle if collision near source airport
-          {
-            PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
-            if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= 5)
-            {
-              PlaneState simPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
-              if (simPlaneState2.route != simPlaneState1.route || (simPlaneState2.route == simPlaneState1.route && simPlaneState2.routeDirection != simPlaneState1.routeDirection))
-              {
-                path = simPlaneState1.path;
-                if (path != null)
-                {
-                  // refresh simulator state
-                  refreshSimState();
-                  planeStateMapSim.get(planeId).takeoffAngle = simPlaneState2.plane.getBearing();
-                  result = startSimulation(planesToSim, round);
-                }
-              }
-            }
-          }*/
           if (result.getReason() == SimulationResult.NORMAL /*|| result.getReason() == SimulationResult.STOPPED*/)
           {
             depart = true;
@@ -437,6 +437,21 @@ public class AStarPlayer  extends airplane.sim.Player
     }
     //logger.warn("shouldn't be here!");
     return planeStateMapSim.get(testPlaneId);
+  }
+
+  public double getTakeoffAngle(SimulationResult result, int planeId)
+  {
+    PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
+    PlaneState planeState = planeStateMap.get(planeId);
+    if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= 5)
+    {
+      PlaneState simPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
+      if (simPlaneState2.route != simPlaneState1.route || (simPlaneState2.route == simPlaneState1.route && simPlaneState2.routeDirection != simPlaneState1.routeDirection))
+      {
+        return simPlaneState2.plane.getBearing();
+      }
+    }
+    return -1;
   }
 
   public void refreshSimState()
