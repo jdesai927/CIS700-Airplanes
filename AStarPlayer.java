@@ -143,9 +143,6 @@ public class AStarPlayer  extends airplane.sim.Player
           double bearing = simPlaneState2.plane.getBearing();
           refreshSimState();
           planeStateMapSim.get(planeId).takeoffAngle = bearing;
-          /*maintainSafetyMargin(GameConfig.SAFETY_RADIUS + .1);
-          result = startSimulation(planesToSim, round);
-          disableSafetyMargin();*/
           result = startSimulation(planesToSim, round);
           if (result.getReason() == SimulationResult.NORMAL)
           {
@@ -291,23 +288,21 @@ public class AStarPlayer  extends airplane.sim.Player
           result = startSimulation(planesToSim, round);
           if (result.getReason() == SimulationResult.TOO_CLOSE) // try larger zone radius 
           {
-            // refresh simulator state
-            refreshSimState();
-            planeStateMapSim.get(planeId).path = path;
-            planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
-            planeStateMapSim.get(planeId).walls = walls;
-
             PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
             Route collideRoute = collisionPlaneState2.route;
             PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
             if (collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection)
             {
-              planeStateMapSim.get(planeId).zoneRadius = WAYPOINT_ZONE_RADIUS2;
               if (path.size() <= 2) // create landing zone
               {
                 planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
               }
-
+              // refresh simulator state
+              refreshSimState();
+              planeStateMapSim.get(planeId).zoneRadius = WAYPOINT_ZONE_RADIUS2;
+              planeStateMapSim.get(planeId).path = path;
+              planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+              planeStateMapSim.get(planeId).walls = walls;
               result = startSimulation(planesToSim, round);
             }
           }
