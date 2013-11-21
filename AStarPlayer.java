@@ -38,7 +38,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double LANDED = -2;
   private static final double MAX_TURN = 9.99999999999999;
   private static final double CRITICAL_COLLISION_ZONE_ANGLE = 10;
-  private static final float COLLISION_ZONE_RADIUS = 5;
+  private static final float COLLISION_ZONE_RADIUS = 5.1f;
   private static final double SAFE_SIM_DIST = 7;
   private static final float AIRPORT_ZONE_RADIUS = 1;
   //private static final int CRITICAL_ROUTE_TRAFFIC = 1; // interesting patterns
@@ -145,6 +145,16 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       depart = false;
       double bearing = getTakeoffAngle(result, planeId);
+      /*double destBearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
+      double deltaBearing = addBearings(destBearing, -bearing);
+      if ((deltaBearing <= 135 && deltaBearing >= 0) || (deltaBearing >= 225 && deltaBearing <= 360))
+      {
+        bearing = bearing;
+      }
+      else
+      {
+        bearing = WAITING;
+      }*/
       if (bearing != WAITING)
       {
         // refresh simulator state
@@ -183,19 +193,44 @@ public class AStarPlayer  extends airplane.sim.Player
         avoidVector.multiply(COLLISION_ZONE_RADIUS);
         Vector avoidVectorOpposite = avoidVector.rotateOpposite();
 
-        float c = (float) plane1.getLocation().distance(plane2.getLocation());
-        float x = (c*c - COLLISION_ZONE_RADIUS*COLLISION_ZONE_RADIUS)/(2*c);
-        if (x > 0)
-        {
-          Vector locationVector = new Vector(plane2.getLocation());
-          approachVector.multiply(c - x);
-          Vector collisionVector = Vector.addVectors(locationVector, approachVector);
-          Vector avoidVectorAbsolute = Vector.addVectors(collisionVector, avoidVector);
-          Vector avoidVectorAbsoluteOpposite = Vector.addVectors(collisionVector, avoidVectorOpposite);
+        Vector locationVector = new Vector(plane2.getLocation());
+        Vector approachVectorOpposite = approachVector.rotateOpposite();
+        double axisDist = approachVector.dotProduct(new Vector(locationVector.getPoint(), plane1.getLocation()));
+        approachVector.multiply((float) axisDist);
+        Vector lineV1 = Vector.addVectors(locationVector, approachVector);
+        approachVector.normalize();
+        approachVector.multiply(150);
+        approachVectorOpposite.multiply(150);
+        Vector lineV2 = Vector.addVectors(locationVector, approachVectorOpposite); 
 
+        Line2D axisLine = new Line2D.Double(lineV1.getPoint(), lineV2.getPoint());
+        float k = (float) axisLine.ptLineDist(plane1.getLocation());
+        float c = (float) (lineV1.getPoint().distance(simPlane2.getLocation()) + simPlane2.getLocation().distance(plane2.getLocation()));
+        float x = ((k-COLLISION_ZONE_RADIUS)*(k-COLLISION_ZONE_RADIUS) + c*c)/(2*c);
+        approachVectorOpposite.normalize();
+        approachVector.normalize();
+        approachVector.multiply(c - x);
+        Vector collisionVector = Vector.addVectors(locationVector, approachVector);
+        Vector avoidVectorAbsolute = Vector.addVectors(collisionVector, avoidVector);
+        Vector avoidVectorAbsoluteOpposite = Vector.addVectors(collisionVector, avoidVectorOpposite);
+
+        // refresh simulator state
+        refreshSimState();
+        planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
+        planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
+
+        result = startSimulation(planesToSim, round);
+        if (result.getReason() == SimulationResult.NORMAL)
+        {
+          depart = true;
+          collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+          upgradeToCollision = true;
+        }
+        if (!upgradeToCollision)
+        {
           // refresh simulator state
           refreshSimState();
-          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
           planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
           result = startSimulation(planesToSim, round);
@@ -204,21 +239,6 @@ public class AStarPlayer  extends airplane.sim.Player
             depart = true;
             collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
             upgradeToCollision = true;
-          }
-          if (!upgradeToCollision)
-          {
-            // refresh simulator state
-            refreshSimState();
-            planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
-            planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
-
-            result = startSimulation(planesToSim, round);
-            if (result.getReason() == SimulationResult.NORMAL)
-            {
-              depart = true;
-              collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
-              upgradeToCollision = true;
-            }
           }
         }
       }

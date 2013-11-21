@@ -75,6 +75,10 @@ public class Vector
     double yCoord = v1.y + v2.y;
     return new Vector(xCoord, yCoord);
   }
+  public double dotProduct(Vector v2)
+  {
+    return (this.x * v2.x + this.y * v2.y);
+  }
   public double x = 0;
   public double y = 0;
 }
