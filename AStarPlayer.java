@@ -195,28 +195,30 @@ public class AStarPlayer  extends airplane.sim.Player
 
           // refresh simulator state
           refreshSimState();
-          planeStateMapSim.get(planeId).currentTarget = avoidVectorAbsolute.getPoint();
-          collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+          //planeStateMapSim.get(planeId).currentTarget = (Double) avoidVectorAbsolute.getPoint();
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
           planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
           result = startSimulation(planesToSim, round);
           if (result.getReason() == SimulationResult.NORMAL)
           {
             depart = true;
+            collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
             upgradeToCollision = true;
           }
           if (!upgradeToCollision)
           {
             // refresh simulator state
             refreshSimState();
-            planeStateMapSim.get(planeId).currentTarget = avoidVectorAbsoluteOpposite.getPoint();
-            collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+            //planeStateMapSim.get(planeId).currentTarget = (Double) avoidVectorAbsoluteOpposite.getPoint();
+            planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
             planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
             result = startSimulation(planesToSim, round);
             if (result.getReason() == SimulationResult.NORMAL)
             {
               depart = true;
+              collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
               upgradeToCollision = true;
             }
           }
@@ -451,6 +453,7 @@ public class AStarPlayer  extends airplane.sim.Player
       planeState.path = aStarPath;
       planeState.walls = aStarWalls;
       planeState.zoneRadius = aStarZoneRadius;
+      planeState.takeoffAngle = takeoffAngle;
     }
 //    else if (upgradeToSafetyZone)
 //    {
