@@ -4,6 +4,7 @@ import java.util.List;
 import java.awt.geom.Point2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D.Double;
+import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
@@ -28,6 +29,8 @@ public class AStarPlayer  extends airplane.sim.Player
 
   private ArrayList<Plane> sortedPlanes = new ArrayList<Plane>();
   private ArrayList<Plane> flyingPlanes = new ArrayList<Plane>();
+  
+  private ArrayList<Zone> safetyZones = new ArrayList<Zone>();
   private Set<Route> routeSet = new HashSet<Route>();
 
   private static final double WAITING = -1;
@@ -44,6 +47,9 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
   private static final double CRITICAL_WAYPOINT_SWITCH_ANGLE = 30;
   private static final double OPAQUE_MARGIN = 20;
+  private static final int BOARD_SIZE = 100;
+  private static final double CRITICAL_SAFETY_DIST = 15; // distance a safety zone's center must be from a potentail path
+  private static final double SAFETY_ZONE_RADIUS = 5;
 
   private boolean testDepart = false;
   private int simStartRound = 0;
@@ -334,6 +340,13 @@ public class AStarPlayer  extends airplane.sim.Player
             }
           }
         }
+        
+        // AStar failed, move to safety zone 
+        else 
+        {
+        	Point2D.Double dest = planeState.plane.getDestination();
+      
+        }
       }
 
     }
@@ -351,7 +364,6 @@ public class AStarPlayer  extends airplane.sim.Player
         depart = true;
       }
     }*/
-
     if (upgradeToCollision)
     {
       planeState.state = PlaneState.States.COLLISION_STATE;
@@ -401,6 +413,102 @@ public class AStarPlayer  extends airplane.sim.Player
       PlaneState planeStateSim = new PlaneState(planeState);
       planeStateMapSim.add(planeStateSim);
     }
+  }
+  
+  public void calculateSafetyZones(ArrayList<Plane> planes)
+  {
+	 // calculate all possible paths a plane may travel
+	 ArrayList<Line2D.Double> paths = new ArrayList<Line2D.Double>();
+	 Set<Point2D.Double> airports = new HashSet<Point2D.Double>();
+	 
+	 for (Plane p :planes) 
+	 {
+		 Line2D.Double nextPath = new Line2D.Double(p.getLocation(), p.getDestination());
+		 paths.add(nextPath);
+		 airports.add(p.getDestination());
+	 }
+	 
+	 for (Point2D.Double p1: airports) 
+	 {
+		 for (Point2D.Double p2: airports) 
+		 {
+			 if (!p1.equals(p2)) 
+			 {
+				 Line2D.Double airportPath = new Line2D.Double(p1, p2);
+				 Line2D.Double reversePath = new Line2D.Double(p2, p1);
+				 if (!paths.contains(reversePath) && !paths.contains(airportPath)) {
+					 paths.add(airportPath);
+				 }
+			 }
+		 }
+	 }
+	 
+/* boolean[][] invalidCenter = new boolean[BOARD_SIZE][BOARD_SIZE];
+	 for (int i = (int)SAFETY_ZONE_RADIUS; i < BOARD_SIZE - SAFETY_ZONE_RADIUS; i++)
+	 {
+		 for (int j = (int)SAFETY_ZONE_RADIUS; j < BOARD_SIZE - SAFETY_ZONE_RADIUS; j++)
+		 {
+			 if (!invalidCenter[i][j]) {
+				 Point2D.Double potentialCenter = new Point2D.Double(i,j);
+				 boolean invalid = false;
+				 for (Line2D.Double path : paths)
+				 {
+					 if (path.ptLineDist(potentialCenter) < CRITICAL_SAFETY_DIST)
+					 {
+						 invalid = true;
+						 break;
+					 }
+				 }
+				 
+				 if (!invalid)
+				 {
+					 Zone nextSafetyZone = new Zone(potentialCenter, SAFETY_ZONE_RADIUS);
+					 safetyZones.add(nextSafetyZone);
+					 int safetySpan = 15; // next zone center must be at least 15 away from this one to avoid collisions
+					 int startRow = Math.max(0, i-safetySpan);
+					 int startCol = Math.max(0, j-safetySpan);
+					 
+					 // invalidate centers within this zone
+					 for (int k = startRow; k < 2 * safetySpan + Math.min(0, i-safetySpan); k++) 
+					 {
+						 for (int l = startCol; l < 2 * safetySpan + Math.min(0, j-safetySpan); l++)
+						 {
+							 invalidCenter[k][l] = true;
+						 }
+					 }
+					 
+					 // move to the next possible zone center along this row
+					 j+= safetySpan - 1;
+				 }
+			 }
+		 }
+	 }*/
+	 
+	 double zoneRadius = 7.5;
+	 
+	 for (int i = 0; i < BOARD_SIZE; i+=15)
+	 {
+		 for (int j = 0; j < BOARD_SIZE; j+=15)
+		 {
+			Point2D.Double potentialCenter = new Point2D.Double(i + zoneRadius, j + zoneRadius); 
+			 boolean invalid = false;
+			 for (Line2D.Double path : paths)
+			 {
+				 if (path.ptLineDist(potentialCenter) < CRITICAL_SAFETY_DIST)
+				 {
+					 invalid = true;
+					 break;
+				 }
+			 }
+			 
+			 if (!invalid)
+			 {
+				 Zone nextSafetyZone = new Zone(potentialCenter, SAFETY_ZONE_RADIUS);
+				 safetyZones.add(nextSafetyZone);
+			 }
+		 }
+	 }
+
   }
 
   public void updateWalls(Set<Route> currentFlowRoutes)
@@ -501,8 +609,37 @@ public class AStarPlayer  extends airplane.sim.Player
       routeSet.add(route);
       planeState.route = route;
     }
+    
+    calculateSafetyZones(planes);
   }
 
+  private Comparator<Zone> CLOSEST_ZONE = new Comparator<Zone>() 
+  {
+	  public Point2D.Double p;
+	  
+	  public void setP(Point2D.Double newPoint)
+	  {
+		  p = new Point2D.Double(newPoint.getX(), newPoint.getY());
+	  }
+	  
+	  public int compare(Zone z1, Zone z2) 
+	  {
+		  double d1 = z1.center.distance(p);
+		  double d2 = z2.center.distance(p);
+		  if (d1 < d2) 
+		  {
+			  return -1;
+		  }
+		  else if (d1 > d2)
+		  {
+			  return 1;
+		  }
+		  else 
+		  {
+			  return 0;
+		  }
+	  }
+  };
 
   private Comparator<Plane> INCREASING_DEPT = new Comparator<Plane>()
   {
@@ -679,18 +816,18 @@ public class AStarPlayer  extends airplane.sim.Player
   @Override
   public double[] updatePlanes(ArrayList<Plane> planes, int round, double[] bearings)
   {
-    // make copy of PlaneState
+ // make copy of PlaneState
     refreshSimState();
     for (int i = 0; i < planes.size(); i++)
     {
-      Plane plane = planes.get(i);
-//      Plane plane = sortedPlanes.get(i);
+//      Plane plane = planes.get(i);
+      Plane plane = sortedPlanes.get(i);
       planeStateMap.set(planeStateMapSim.get(plane.id).plane.id, planeStateMapSim.get(plane.id));
     }
     for (int i = 0; i < planes.size(); i++)
     {
-      Plane p = planes.get(i);
-//      Plane p = sortedPlanes.get(i);
+//      Plane p = planes.get(i);
+      Plane p = sortedPlanes.get(i);
       PlaneState planeState = planeStateMap.get(p.id);
       if (flyingPlanes.contains(p) && p.getBearing() != -2)
       {
@@ -707,8 +844,8 @@ public class AStarPlayer  extends airplane.sim.Player
         else if (planeState.state == PlaneState.States.SPIRAL_STATE)
         {
           // move in spiral pattern towards target
-          bearings[i] = spiralOrbit(planeState, p.getDestination());
-//        	bearings[p.id] = spiralOrbit(planeState, p.getDestination());
+//          bearings[i] = spiralOrbit(planeState, p.getDestination());
+        	bearings[p.id] = spiralOrbit(planeState, p.getDestination());
         }
         else if (planeState.state == PlaneState.States.ORBIT_STATE)
         {
@@ -734,22 +871,21 @@ public class AStarPlayer  extends airplane.sim.Player
             {
 
               planeState.pathIter = planeState.path.size() - 1;
-//              bearings[p.id] = spiralOrbit(planeState, p.getDestination());
-              bearings[i] = spiralOrbit(planeState, p.getDestination());
+              bearings[p.id] = spiralOrbit(planeState, p.getDestination());
 
             }
             else // join next waypoint
             {
               wpPoint = planeState.path.get(planeState.pathIter).point;
-              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
-//              bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+//              bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+              bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
             }
           }
           else
           {
             // Move in orbital tangent towards waypoint zone
-            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
-//            bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+//            bearings[i] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
+            bearings[p.id] = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, planeState.orbitDirection);
           }
         }
       }
@@ -760,14 +896,13 @@ public class AStarPlayer  extends airplane.sim.Player
         {
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
-//            bearings[p.id] = straightLinePath(planeState);
-            bearings[i] = straightLinePath(planeState);
+            bearings[p.id] = straightLinePath(planeState);
           }
           else if (planeState.state == PlaneState.States.COLLISION_STATE)
           {
             // Move in orbital tangent
-            bearings[i] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
-//        	  bearings[p.id] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
+//            bearings[i] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
+        	  bearings[p.id] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
           }
           else if (planeState.state == PlaneState.States.ORBIT_STATE)
           {
@@ -779,8 +914,8 @@ public class AStarPlayer  extends airplane.sim.Player
               bearing = joinOrbit(planeState, (Point2D.Double) wpPoint, planeState.zoneRadius, -1);
               planeState.orbitDirection = -1;
             }
-            bearings[i] = bearing;
-//            bearings[p.id] = bearing;
+//            bearings[i] = bearing;
+            bearings[p.id] = bearing;
           }
           planeState.route.currentTraffic++;
           if (!flyingPlanes.contains(p))
