@@ -195,8 +195,7 @@ public class AStarPlayer  extends airplane.sim.Player
 
           // refresh simulator state
           refreshSimState();
-          //planeStateMapSim.get(planeId).currentTarget = (Double) avoidVectorAbsolute.getPoint();
-          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
           planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
           result = startSimulation(planesToSim, round);
@@ -210,7 +209,6 @@ public class AStarPlayer  extends airplane.sim.Player
           {
             // refresh simulator state
             refreshSimState();
-            //planeStateMapSim.get(planeId).currentTarget = (Double) avoidVectorAbsoluteOpposite.getPoint();
             planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
             planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
