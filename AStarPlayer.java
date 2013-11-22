@@ -29,7 +29,8 @@ public class AStarPlayer  extends airplane.sim.Player
   private List<PlaneState> planeStateMapSim;
 
   private ArrayList<Plane> sortedPlanes = new ArrayList<Plane>();
-  private ArrayList<Plane> flyingPlanes = new ArrayList<Plane>();
+  private Set<Integer> flyingPlanes = new HashSet<Integer>();
+  private Set<Integer> criticalPlanes = new HashSet<Integer>();
   
   private ArrayList<Zone> safetyZones = new ArrayList<Zone>();
   private Set<Route> routeSet = new HashSet<Route>();
@@ -101,8 +102,15 @@ public class AStarPlayer  extends airplane.sim.Player
     simPlaneId = planeId;
     boolean depart = false;
     ArrayList<Plane> planesToSim = new ArrayList<Plane>();
-    planesToSim.addAll(flyingPlanes);
-    planesToSim.add(planes.get(planeId));
+    for (int i : flyingPlanes)
+      planesToSim.add(planeStateMap.get(i).plane);
+    for (int i : criticalPlanes)
+    {
+      if (!flyingPlanes.contains(i))
+    	  planesToSim.add(planeStateMap.get(i).plane);
+    }
+    if (!criticalPlanes.contains(planeId))
+    	planesToSim.add(planes.get(planeId));
 
     boolean upgradeToCollision = false;
     Point2D collisionAvoidTarget = new Point2D.Double(0, 0);
@@ -452,7 +460,7 @@ public class AStarPlayer  extends airplane.sim.Player
     }
     if (!result.isSuccess())
     {
-      //logger.info("COULDN'T DEPART BECAUSE " + reasonToString(result.getReason()));
+      logger.info("COULDN'T DEPART BECAUSE " + reasonToString(result.getReason()));
       depart = false;
       if (result.getReason() == SimulationResult.STOPPED && !testDepart)
       {
@@ -719,21 +727,18 @@ public class AStarPlayer  extends airplane.sim.Player
     planeStateMapSim = new ArrayList<PlaneState> ();
     
     sortedPlanes.addAll(planes);
-    Collections.sort(sortedPlanes, INCREASING_DEPT);
-    Collections.sort(sortedPlanes, DECREASING_DIST);
+    /*Collections.sort(sortedPlanes, INCREASING_DEPT);
+    Collections.sort(sortedPlanes, DECREASING_DIST);*/
+    Collections.sort(sortedPlanes, DECREASING_COST);
     
-    for (int i = 0; i < planes.size(); i++)
-    {
-      Plane plane = planes.get(i);
-      PlaneState planeState = new PlaneState(plane);
-      planeStateMap.add(plane.id, planeState);
-    }
     // initialize ids to distinguish planes
     for (int i = 0; i < planes.size(); i++)
     {
       Plane p = planes.get(i);
       p.id = i;
       planes.set(i, p);
+      PlaneState planeState = new PlaneState(p);
+      planeStateMap.add(p.id, planeState);
     }
 
     // compute routes
@@ -768,6 +773,23 @@ public class AStarPlayer  extends airplane.sim.Player
       }
       routeSet.add(route);
       planeState.route = route;
+
+      ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+      // simulate trajectory of high cost planes, add as many as possible to set of critical planes
+      /*for (Plane plane : sortedPlanes)
+      {
+        simPlanes.add(plane);
+        refreshSimState();
+        SimulationResult result = startSimulation(simPlanes, 0);
+        if (result.getReason() == SimulationResult.NORMAL)
+        {
+          criticalPlanes.add(plane.id);
+        }
+        else
+        {
+          simPlanes.remove(plane);
+        }
+      }*/
     }
     
     calculateSafetyZones(planes);
@@ -914,8 +936,9 @@ public class AStarPlayer  extends airplane.sim.Player
 
       else
       {
-        if (p.getBearing() != -2)
+        if (p.getBearing() != -2 && p.getDepartureTime() <= round)
         {
+          //logger.info("planeId: " + p.id + " sim departure time: " + round);
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
             if (planeState.takeoffAngle == -1)
@@ -962,20 +985,12 @@ public class AStarPlayer  extends airplane.sim.Player
   @Override
   public double[] updatePlanes(ArrayList<Plane> planes, int round, double[] bearings)
   {
- // make copy of PlaneState
-    refreshSimState();
-    for (int i = 0; i < planes.size(); i++)
-    {
-//      Plane plane = planes.get(i);
-      Plane plane = sortedPlanes.get(i);
-      planeStateMap.set(planeStateMapSim.get(plane.id).plane.id, planeStateMapSim.get(plane.id));
-    }
     for (int i = 0; i < planes.size(); i++)
     {
 //      Plane p = planes.get(i);
       Plane p = sortedPlanes.get(i);
       PlaneState planeState = planeStateMap.get(p.id);
-      if (flyingPlanes.contains(p) && p.getBearing() != -2)
+      if (flyingPlanes.contains(p.id) && p.getBearing() != -2)
       {
         if (planeState.state == PlaneState.States.NULL_STATE)
         {
@@ -1038,7 +1053,13 @@ public class AStarPlayer  extends airplane.sim.Player
 
       else if (round >= p.getDepartureTime() && p.getBearing() != -2)
       {
-        if (depart(p.id, round, planes) && p.getBearing() != -2)
+        boolean departCond = false;
+        if (criticalPlanes.contains(p.id))
+          departCond = true;
+        else
+          departCond = depart(p.id, round-1, planes);
+        //logger.info("planeId: " + p.id + " real departure time: " + round);
+        if (departCond && p.getBearing() != -2)
         {
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
@@ -1076,9 +1097,9 @@ public class AStarPlayer  extends airplane.sim.Player
 
           }
           planeState.route.currentTraffic++;
-          if (!flyingPlanes.contains(p))
+          if (!flyingPlanes.contains(p.id))
           {
-            flyingPlanes.add(p);
+            flyingPlanes.add(p.id);
           }
         }
       }
@@ -1103,7 +1124,7 @@ public class AStarPlayer  extends airplane.sim.Player
             }
           }
         }
-        flyingPlanes.remove(p);
+        flyingPlanes.remove(p.id);
       }
     }
     return bearings;
