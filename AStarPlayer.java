@@ -110,7 +110,7 @@ public class AStarPlayer  extends airplane.sim.Player
     	  planesToSim.add(planeStateMap.get(i).plane);
     }
     if (!criticalPlanes.contains(planeId))
-    	planesToSim.add(planes.get(planeId));
+    	planesToSim.add(planeStateMap.get(planeId).plane);
 
     boolean upgradeToCollision = false;
     Point2D collisionAvoidTarget = new Point2D.Double(0, 0);
@@ -727,9 +727,9 @@ public class AStarPlayer  extends airplane.sim.Player
     planeStateMapSim = new ArrayList<PlaneState> ();
     
     sortedPlanes.addAll(planes);
-    /*Collections.sort(sortedPlanes, INCREASING_DEPT);
-    Collections.sort(sortedPlanes, DECREASING_DIST);*/
-    Collections.sort(sortedPlanes, DECREASING_COST);
+    Collections.sort(sortedPlanes, INCREASING_DEPT);
+    Collections.sort(sortedPlanes, DECREASING_DIST);
+    //Collections.sort(sortedPlanes, DECREASING_COST);
     
     // initialize ids to distinguish planes
     for (int i = 0; i < planes.size(); i++)
@@ -773,26 +773,34 @@ public class AStarPlayer  extends airplane.sim.Player
       }
       routeSet.add(route);
       planeState.route = route;
-
-      ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
-      // simulate trajectory of high cost planes, add as many as possible to set of critical planes
-      /*for (Plane plane : sortedPlanes)
-      {
-        simPlanes.add(plane);
-        refreshSimState();
-        SimulationResult result = startSimulation(simPlanes, 0);
-        if (result.getReason() == SimulationResult.NORMAL)
-        {
-          criticalPlanes.add(plane.id);
-        }
-        else
-        {
-          simPlanes.remove(plane);
-        }
-      }*/
     }
     
     calculateSafetyZones(planes);
+
+    ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+    // simulate trajectory of high cost planes, add as many as possible to set of critical planes
+    /*for (Plane plane : sortedPlanes)
+    {
+      simPlanes.add(plane);
+      refreshSimState();
+      SimulationResult result = startSimulation(simPlanes, 0);
+      if (result.getReason() == SimulationResult.NORMAL)
+      {
+        criticalPlanes.add(plane.id);
+      }
+      else
+      {
+        simPlanes.remove(plane);
+      }
+    }*/
+    for (Plane plane : sortedPlanes)
+    {
+      if (depart(plane.id, 0, simPlanes))
+      {
+        criticalPlanes.add(plane.id);
+        simPlanes.add(plane);
+      }
+    }
   }
 
   private Comparator<Plane> INCREASING_DEPT = new Comparator<Plane>()
@@ -1057,7 +1065,14 @@ public class AStarPlayer  extends airplane.sim.Player
         if (criticalPlanes.contains(p.id))
           departCond = true;
         else
-          departCond = depart(p.id, round-1, planes);
+        {
+          ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+          for (int j : flyingPlanes)
+          {
+            simPlanes.add(planeStateMap.get(j).plane);
+          }
+          departCond = depart(p.id, round-1, simPlanes);
+        }
         //logger.info("planeId: " + p.id + " real departure time: " + round);
         if (departCond && p.getBearing() != -2)
         {
