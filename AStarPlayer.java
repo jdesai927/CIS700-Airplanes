@@ -41,17 +41,20 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double LANDED = -2;
   private static final double MAX_TURN = 9.99999999999999;
   private static final double CRITICAL_COLLISION_ZONE_ANGLE = 10;
-  private static final float COLLISION_ZONE_RADIUS = 5.1f;
-  private static final double SAFE_SIM_DIST = 7;
-  private static final float AIRPORT_ZONE_RADIUS = 1;
+  private static final double CRITICAL_COLLISION_ZONE_ANGLE2 = 90;
+  private static final double COLLISION_ZONE_TARGET_RADIUS = .7;
+  private static final double COLLISION_ZONE_RADIUS = 5.0;
+  private static final double AIRPORT_ZONE_RADIUS = 1;
   //private static final int CRITICAL_ROUTE_TRAFFIC = 1; // interesting patterns
   private int CRITICAL_ROUTE_TRAFFIC = 5; // for flow performance
+  private int CRITICAL_ROUTE_TRAFFIC2 = 2; // lower traffic threshold used for choosing between collision zone angles.
   private static final int CRITICAL_WAYPOINT_TRAFFIC = 10;
   static final double WAYPOINT_ZONE_RADIUS = 7;
   static final double WAYPOINT_ZONE_RADIUS2 = 13;
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
   private static final double CRITICAL_WAYPOINT_SWITCH_ANGLE = 30;
   private static final double OPAQUE_MARGIN = 20;
+  private static final double ADAPTIVE_TAKEOFF_ANGLE_RADIUS = 7;
   private static final int BOARD_SIZE = 100;
   private static final double CRITICAL_SAFETY_DIST = 15; // distance a safety zone's center must be from a potentail path
   private static final double CRITICAL_ZONE_DIST = 35;
@@ -136,8 +139,10 @@ public class AStarPlayer  extends airplane.sim.Player
     SimulationResult resultBackup = result;
     PlaneState planeState = planeStateMap.get(planeId);
 
-    /*if (round >= 20 && (planeId == 14 || planeId == 14))
+    /*if (round >= 49 && (planeId == 43 || planeId == 44))
     {
+      PlaneState planeState43 = planeStateMap.get(43);
+      PlaneState planeState44 = planeStateMap.get(44);
       logger.info("round " + round);
     }*/
 
@@ -192,7 +197,12 @@ public class AStarPlayer  extends airplane.sim.Player
       Point2D simP1 = simPlane1.getLocation();
       Point2D simP2 = simPlane2.getLocation();
       double angleOfApproach = addBearings(simPlane1.getBearing(), - simPlane2.getBearing());
-      if ((angleOfApproach <= 180 + CRITICAL_COLLISION_ZONE_ANGLE) && (angleOfApproach >= 180 - CRITICAL_COLLISION_ZONE_ANGLE) && simPlane2.getBearing() >= 0)
+      double criticalCollisionZoneAngle = CRITICAL_COLLISION_ZONE_ANGLE2;
+      if (collisionPlaneState.route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC2)
+      {
+        criticalCollisionZoneAngle = CRITICAL_COLLISION_ZONE_ANGLE;
+      }
+      if ((angleOfApproach <= 180 + criticalCollisionZoneAngle) && (angleOfApproach >= 180 - criticalCollisionZoneAngle) && simPlane2.getBearing() >= 0)
       {
         PlaneState planeState1 = planeStateMap.get(simPlane1.id);
         PlaneState planeState2 = planeStateMap.get(simPlane2.id);
@@ -206,7 +216,7 @@ public class AStarPlayer  extends airplane.sim.Player
         Vector locationVector = new Vector(plane2.getLocation());
         Vector approachVectorOpposite = approachVector.rotateOpposite();
         double axisDist = approachVector.dotProduct(new Vector(locationVector.getPoint(), plane1.getLocation()));
-        approachVector.multiply((float) axisDist);
+        approachVector.multiply(axisDist);
         Vector lineV1 = Vector.addVectors(locationVector, approachVector);
         approachVector.normalize();
         approachVector.multiply(150);
@@ -214,12 +224,12 @@ public class AStarPlayer  extends airplane.sim.Player
         Vector lineV2 = Vector.addVectors(locationVector, approachVectorOpposite); 
 
         Line2D axisLine = new Line2D.Double(lineV1.getPoint(), lineV2.getPoint());
-        float k = (float) axisLine.ptLineDist(plane1.getLocation());
-        float c = (float) (lineV1.getPoint().distance(simPlane2.getLocation()) + simPlane2.getLocation().distance(plane2.getLocation()));
-        float x = ((k-COLLISION_ZONE_RADIUS)*(k-COLLISION_ZONE_RADIUS) + c*c)/(2*c);
+        double k = axisLine.ptLineDist(plane1.getLocation());
+        double c = (lineV1.getPoint().distance(simPlane2.getLocation()) + simPlane2.getLocation().distance(plane2.getLocation()));
+        double x = ((k-COLLISION_ZONE_RADIUS)*(k-COLLISION_ZONE_RADIUS) + c*c)/(2*c);
         approachVectorOpposite.normalize();
         approachVector.normalize();
-        approachVector.multiply(c - x);
+        approachVector.multiply(x);
         Vector collisionVector = Vector.addVectors(locationVector, approachVector);
         Vector avoidVectorAbsolute = Vector.addVectors(collisionVector, avoidVector);
         Vector avoidVectorAbsoluteOpposite = Vector.addVectors(collisionVector, avoidVectorOpposite);
@@ -564,7 +574,7 @@ public class AStarPlayer  extends airplane.sim.Player
   {
     PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
     PlaneState planeState = planeStateMap.get(planeId);
-    if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= 5)
+    if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= ADAPTIVE_TAKEOFF_ANGLE_RADIUS)
     {
       PlaneState simPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
       if (simPlaneState2.route != simPlaneState1.route || (simPlaneState2.route == simPlaneState1.route && simPlaneState2.routeDirection != simPlaneState1.routeDirection))
@@ -1195,7 +1205,7 @@ public class AStarPlayer  extends airplane.sim.Player
     boolean intersects = false;
     Vector locationVector = new Vector(plane.getLocation());
     Vector directionVector = new Vector(degree - 90);
-    directionVector.multiply((float) plane.getLocation().distance(center));
+    directionVector.multiply(plane.getLocation().distance(center));
     Vector pathVector = Vector.addVectors(locationVector, directionVector);
     Line2D pathLine = new Line2D.Double(planeState.plane.getLocation(), pathVector.getPoint());
     for (Line2D wall : planeState.walls)
@@ -1209,7 +1219,7 @@ public class AStarPlayer  extends airplane.sim.Player
   public boolean reachedCollisionZone(PlaneState planeState)
   {
     Plane plane = planeState.plane;
-    if(plane.getLocation().distance(planeState.currentTarget) < 1)
+    if(plane.getLocation().distance(planeState.currentTarget) < COLLISION_ZONE_TARGET_RADIUS)
       return true;
     else
       return false;

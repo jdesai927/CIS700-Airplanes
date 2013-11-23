@@ -13,13 +13,13 @@ public class Vector
   }
   public Vector(Point2D point1, Point2D point2)
   {
-    x = (float) (point2.getX() - point1.getX());
-    y = (float) (point2.getY() - point1.getY());
+    x = point2.getX() - point1.getX();
+    y = point2.getY() - point1.getY();
   }
   public Vector(Point2D point)
   {
-    x = (float) point.getX();
-    y = (float) point.getY();
+    x = point.getX();
+    y = point.getY();
   }
   public Vector(double angle)
   {
@@ -33,18 +33,18 @@ public class Vector
   }
   public void normalize()
   {
-    float vectorLength = length();
-    x = (float) (x/vectorLength);
-    y = (float) (y/vectorLength);
+    double vectorLength = length();
+    x = x/vectorLength;
+    y = y/vectorLength;
   }
-  public void multiply(float factor)
+  public void multiply(double factor)
   {
     x = factor*x;
     y = factor*y;
   }
-  public float length()
+  public double length()
   {
-    return (float) Point2D.distance(0, 0, x, y);
+    return Point2D.distance(0, 0, x, y);
   }
   public Vector rotate90Clockwise()
   {
