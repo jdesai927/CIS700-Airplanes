@@ -1,4 +1,5 @@
 package airplane.g5;
+import java.awt.geom.Line2D;
 
 public class Route
 {
@@ -9,9 +10,11 @@ public class Route
   {
     waypoint1 = wp1;
     waypoint2 = wp2;
+    Line2D routeLine = new Line2D.Double(wp1.point, wp2.point);
   }
 
   int currentTraffic = 0;
+  Line2D routeLine; 
 
   // traffic direction
   public static final int FORWARD = 1;

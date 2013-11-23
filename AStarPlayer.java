@@ -34,6 +34,8 @@ public class AStarPlayer  extends airplane.sim.Player
   
   private ArrayList<Zone> safetyZones = new ArrayList<Zone>();
   private Set<Route> routeSet = new HashSet<Route>();
+  private Map<Route, Set<PlaneState> > routeMap = new HashMap<Route, Set<PlaneState> >();
+  private Map<Route, Integer> routeDirectionMap = new HashMap<Route, Integer>();
 
   private static final double WAITING = -1;
   private static final double LANDED = -2;
@@ -102,11 +104,11 @@ public class AStarPlayer  extends airplane.sim.Player
     simPlaneId = planeId;
     boolean depart = false;
     ArrayList<Plane> planesToSim = new ArrayList<Plane>();
-    for (int i : flyingPlanes)
-      planesToSim.add(planeStateMap.get(i).plane);
+    for (Plane p : planes)
+      planesToSim.add(p);
     for (int i : criticalPlanes)
     {
-      if (!flyingPlanes.contains(i))
+      if (!planes.contains(planeStateMap.get(i).plane))
     	  planesToSim.add(planeStateMap.get(i).plane);
     }
     if (!criticalPlanes.contains(planeId))
@@ -749,6 +751,7 @@ public class AStarPlayer  extends airplane.sim.Player
       planeState.routeDirection = Route.FORWARD;
       // check if this route can be clubbed with an existing route
       Route route = new Route(new Waypoint(p1), new Waypoint(p2));
+      Set<PlaneState> routePlanes = new HashSet<PlaneState> ();
       for (Route routeMerge : routeSet)
       {
         Point2D wpP1 = routeMerge.waypoint1.point;
@@ -760,6 +763,9 @@ public class AStarPlayer  extends airplane.sim.Player
           {
             planeState.routeDirection = Route.FORWARD;
             route = routeMerge;
+            routePlanes = routeMap.get(route);
+            if (routeDirectionMap.get(route) != Route.FORWARD)
+              routeDirectionMap.put(route, 0);
           }
         }
         if (wpP1.distance(p2) < AIRPORT_ZONE_RADIUS)
@@ -768,39 +774,70 @@ public class AStarPlayer  extends airplane.sim.Player
           {
             planeState.routeDirection = Route.BACKWARD;
             route = routeMerge;
+            routePlanes = routeMap.get(route);
+            if (routeDirectionMap.get(route) != Route.BACKWARD)
+              routeDirectionMap.put(route, 0);
           }
         }
       }
       routeSet.add(route);
       planeState.route = route;
+      routePlanes.add(planeState);
+      if (!routeMap.containsKey(route))
+        routeMap.put(route, routePlanes);
+      if (!routeDirectionMap.containsKey(route))
+        routeDirectionMap.put(route, planeState.routeDirection);
     }
     
     calculateSafetyZones(planes);
 
     ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+    Map<Route, Integer> routesSeen = new HashMap<Route,Integer> ();
+    Set<Route> routesDone = new HashSet<Route> ();
     // simulate trajectory of high cost planes, add as many as possible to set of critical planes
-    /*for (Plane plane : sortedPlanes)
+    for (Plane plane : sortedPlanes)
     {
-      simPlanes.add(plane);
-      refreshSimState();
-      SimulationResult result = startSimulation(simPlanes, 0);
-      if (result.getReason() == SimulationResult.NORMAL)
+      // simulate each route in each direction only once
+      PlaneState planeState = planeStateMap.get(plane.id);
+      Route route = planeState.route;
+      if (routesDone.contains(route))
+        continue;
+      if (routeSet.size() == routesDone.size())
+        break;
+      if (!routesSeen.containsKey(route))
       {
-        criticalPlanes.add(plane.id);
+        routesSeen.put(route, planeState.routeDirection);
       }
       else
       {
-        simPlanes.remove(plane);
+        int direction = routesSeen.get(route);
+        if (direction == 0)
+          continue;
+        else if (direction != planeState.routeDirection)
+        {
+          routesSeen.put(route, 0);
+          routesDone.add(route);
+        }
+        else if (routeDirectionMap.get(route) == planeState.routeDirection)
+        {
+          routesDone.add(route);
+          continue;
+        }
       }
-    }*/
-    for (Plane plane : sortedPlanes)
-    {
       if (depart(plane.id, 0, simPlanes))
       {
         criticalPlanes.add(plane.id);
         simPlanes.add(plane);
       }
     }
+    /*for (Plane plane : sortedPlanes)
+    {
+      if (depart(plane.id, 0, simPlanes))
+      {
+        criticalPlanes.add(plane.id);
+        simPlanes.add(plane);
+      }
+    }*/
   }
 
   private Comparator<Plane> INCREASING_DEPT = new Comparator<Plane>()
@@ -1062,6 +1099,12 @@ public class AStarPlayer  extends airplane.sim.Player
       else if (round >= p.getDepartureTime() && p.getBearing() != -2)
       {
         boolean departCond = false;
+        /*ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+        for (int j : flyingPlanes)
+        {
+          simPlanes.add(planeStateMap.get(j).plane);
+        }
+        departCond = depart(p.id, round-1, simPlanes);*/
         if (criticalPlanes.contains(p.id))
           departCond = true;
         else
