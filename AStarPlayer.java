@@ -105,6 +105,29 @@ public class AStarPlayer  extends airplane.sim.Player
   {
     simStartRound = round;
     simPlaneId = planeId;
+    PlaneState planeState = planeStateMap.get(planeId);
+
+    // get current flow routes
+    Set<Route> currentFlowRoutes = new HashSet<Route> ();
+    if (planeState.route.currentFlowRoutes != null)
+    {
+      currentFlowRoutes = planeState.route.currentFlowRoutes;
+    }
+    else
+    {
+      for (Route route : routeSet)
+      {
+        if (route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC && route != planeStateMap.get(planeId).route)
+        {
+          currentFlowRoutes.add(route);
+        }
+      }
+      planeState.route.currentFlowRoutes = currentFlowRoutes;
+    }
+
+    if (criticalPlanes.contains(planeId))
+      return true;
+
     boolean depart = false;
     ArrayList<Plane> planesToSim = new ArrayList<Plane>();
     for (Plane p : planes)
@@ -137,7 +160,6 @@ public class AStarPlayer  extends airplane.sim.Player
     if (result.getReason() == SimulationResult.NORMAL)
       depart = true;
     SimulationResult resultBackup = result;
-    PlaneState planeState = planeStateMap.get(planeId);
 
     /*if (round >= 49 && (planeId == 43 || planeId == 44))
     {
@@ -145,16 +167,6 @@ public class AStarPlayer  extends airplane.sim.Player
       PlaneState planeState44 = planeStateMap.get(44);
       logger.info("round " + round);
     }*/
-
-    // get current flow routes
-    Set<Route> currentFlowRoutes = new HashSet<Route> ();
-    for (Route route : routeSet)
-    {
-      if (route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC && route != planeStateMap.get(planeId).route)
-      {
-        currentFlowRoutes.add(route);
-      }
-    }
 
     if (result.getReason() == SimulationResult.TOO_CLOSE && currentFlowRoutes.size() == 0) // if collision close to source airport, change takeoff angle
     {
@@ -264,16 +276,25 @@ public class AStarPlayer  extends airplane.sim.Player
       }
     }
     
-    if (result.getReason() == SimulationResult.TOO_CLOSE) // A* routing if collision with a flow
+    // check if intersecting with high density flow, take A* path in that case
+    boolean intersectsFlow = false;
+    if (result.getReason() == SimulationResult.NORMAL)
     {
+      if(checkHighDensityFlowIntersection(planeStateMapSim.get(planeId).path, currentFlowRoutes, .5))
+        intersectsFlow = true;
+    }
+
+    if (result.getReason() == SimulationResult.TOO_CLOSE || intersectsFlow) // A* routing if collision with a flow
+    {
+      depart = false;
       PlaneState collisionPlaneState = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
       Plane simPlane1 = planeStateMapSim.get(planeId).plane;
       Plane simPlane2 = collisionPlaneState.plane;
       Point2D simP1 = simPlane1.getLocation();
       Point2D simP2 = simPlane2.getLocation();
 
-      // traffic more than flow threshold and not this flow
-      if (planeStateMap.get(simPlane2.id).route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC && planeStateMap.get(simPlane2.id).route != planeStateMap.get(simPlane1.id).route)
+      // traffic more than flow threshold and not this flow or intersects high density flow
+      if (intersectsFlow || (planeStateMap.get(simPlane2.id).route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC && planeStateMap.get(simPlane2.id).route != planeStateMap.get(simPlane1.id).route))
       {
         // update walls
         updateWalls(currentFlowRoutes);
@@ -303,7 +324,6 @@ public class AStarPlayer  extends airplane.sim.Player
           if (flow.waypoint2.currentTraffic - flow.waypoint2.currentTrafficMap.get(planeState.route).get(planeState.routeDirection) < CRITICAL_WAYPOINT_TRAFFIC)
             addWaypoint(flow.waypoint2);
         }
-        // calculate A* path
         ArrayList<Waypoint> path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
         if (path == null) // recomute path without pruning
         {
@@ -351,108 +371,122 @@ public class AStarPlayer  extends airplane.sim.Player
               result = startSimulation(planesToSim, round);
             }
           }
-          if (result.getReason() == SimulationResult.TOO_CLOSE) // try larger zone radius 
+          for (int i = 0; i < 1; i++) // n tries
           {
-            PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
-            Route collideRoute = collisionPlaneState2.route;
-            PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
-            if ((collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection) ||
-                (collideRoute != planeState.route))
+            if (result.getReason() == SimulationResult.TOO_CLOSE) // try larger zone radius 
             {
-              // refresh simulator state
-              refreshSimState();
-              if (path.size() <= 2) // create landing zone
+              PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
+              Route collideRoute = collisionPlaneState2.route;
+              PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
+              if ((collideRoute == planeState.route && planeState.routeDirection != collisionPlaneState2.routeDirection) ||
+                  (collideRoute != planeState.route))
               {
-                planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
-              }
-              planeStateMapSim.get(planeId).zoneRadius = WAYPOINT_ZONE_RADIUS2;
-              planeStateMapSim.get(planeId).path = path;
-              planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
-              planeStateMapSim.get(planeId).walls = walls;
-              planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
-              result = startSimulation(planesToSim, round);
-            }
-          }
-          if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
-          {
-            PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
-            Route collideRoute = collisionPlaneState2.route;
-            PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
-            // update current waypoints
-            if (collideRoute != planeState.route || routeSet.size() <= 2)
-              removeWaypoint(simPlaneState1.path.get(simPlaneState1.pathIter));
-            path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
-            if (path == null)
-            {
-            	ArrayList<Zone> zones = new ArrayList<Zone>();
-            	zones.addAll(safetyZones);
-            	while (zones.size() > 0)
-            	{
-            		Point2D.Double destination = planeState.plane.getDestination();
-            		Zone nextZone = getClosestZone(destination, zones);
-            		
-            		// break if the next closest zone is too far
-            		if (nextZone.center.distance(destination) >= CRITICAL_ZONE_DIST) 
-            		{
-            			break;
-            		}
-            		
-            		path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(nextZone.center));
-            		if (path != null)
-            		{
-            			break;
-            		}
-            		
-            		zones.remove(nextZone);
-            	}
-            }
-            if (path != null)
-            {
-              // refresh simulator state
-              refreshSimState();
-              planeStateMapSim.get(planeId).path = path;
-              planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
-              planeStateMapSim.get(planeId).walls = walls;
-              planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
-              if (path.size() <= 2) // create landing zone
-              {
-                planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
-              }
-              result = startSimulation(planesToSim, round);
-            }
-          }
-          if (result.getReason() == SimulationResult.NORMAL /*|| result.getReason() == SimulationResult.STOPPED*/)
-          {
-            depart = true;
-            upgradeToAStar = true;
-            aStarPath = path;
-            aStarZoneRadius = planeStateMapSim.get(planeId).zoneRadius;
-            takeoffAngle = planeStateMapSim.get(planeId).takeoffAngle;
-
-            // make copy of walls
-            for (Line2D wall : walls)
-            {
-              Line2D newWall = new Line2D.Double(wall.getP1(), wall.getP2());
-              aStarWalls.add(newWall);
-            }
-            // update traffic on waypoints in-between source-dest
-            for (Waypoint waypoint : path)
-            {
-              if (waypoint != path.get(0) && waypoint != path.get(path.size() - 1))
-              {
-                // initialize waypoint traffic map if null
-                if (waypoint.currentTrafficMap.get(planeState.route) == null)
+                // refresh simulator state
+                refreshSimState();
+                if (path.size() <= 2) // create landing zone
                 {
-                  waypoint.currentTrafficMap.put(planeState.route, new HashMap<Integer, Integer> ());
-                  Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
-                  flowTraffic.put(planeState.routeDirection, 0);
-                  flowTraffic.put(-planeState.routeDirection, 0);
+                  planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
                 }
-                Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
-                int trafficValue = flowTraffic.get(planeState.routeDirection);
-                trafficValue++;
-                flowTraffic.put(planeState.routeDirection, trafficValue);
-                waypoint.currentTraffic++;
+                planeStateMapSim.get(planeId).zoneRadius = WAYPOINT_ZONE_RADIUS2;
+                planeStateMapSim.get(planeId).path = path;
+                planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+                planeStateMapSim.get(planeId).walls = walls;
+                planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
+                result = startSimulation(planesToSim, round);
+              }
+              else if (collideRoute == planeState.route && routeSet.size() > 2) // abort if collision with same flow
+              {
+                break;
+              }
+            }
+            if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
+            {
+              PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
+              Route collideRoute = collisionPlaneState2.route;
+              PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
+              // update current waypoints
+              if (collideRoute != planeState.route || routeSet.size() <= 2)
+                removeWaypoint(simPlaneState1.path.get(simPlaneState1.pathIter));
+              path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(planeState.plane.getDestination()));
+              if (path == null)
+              {
+                break;
+                /*ArrayList<Zone> zones = new ArrayList<Zone>();
+                zones.addAll(safetyZones);
+                while (zones.size() > 0)
+                {
+                  Point2D.Double destination = planeState.plane.getDestination();
+                  Zone nextZone = getClosestZone(destination, zones);
+                  
+                  // break if the next closest zone is too far
+                  if (nextZone.center.distance(destination) >= CRITICAL_ZONE_DIST) 
+                  {
+                    break;
+                  }
+                  
+                  path = AStar(new Waypoint(planeState.plane.getLocation()), new Waypoint(nextZone.center));
+                  if (path != null)
+                  {
+                    break;
+                  }
+                  
+                  zones.remove(nextZone);
+                }*/
+              }
+              if (path != null)
+              {
+                // refresh simulator state
+                refreshSimState();
+                planeStateMapSim.get(planeId).path = path;
+                planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+                planeStateMapSim.get(planeId).walls = walls;
+                planeStateMapSim.get(planeId).takeoffAngle = takeoffAngle;
+                if (path.size() <= 2) // create landing zone
+                {
+                  planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
+                }
+                result = startSimulation(planesToSim, round);
+              }
+            }
+            if (result.getReason() == SimulationResult.OUT_OF_BOUNDS) // prune current waypoint
+            {
+              PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
+              // update current waypoints
+              removeWaypoint(simPlaneState1.path.get(simPlaneState1.pathIter));
+            }
+            if (result.getReason() == SimulationResult.NORMAL /*|| result.getReason() == SimulationResult.STOPPED*/)
+            {
+              depart = true;
+              upgradeToAStar = true;
+              aStarPath = path;
+              aStarZoneRadius = planeStateMapSim.get(planeId).zoneRadius;
+              takeoffAngle = planeStateMapSim.get(planeId).takeoffAngle;
+
+              // make copy of walls
+              for (Line2D wall : walls)
+              {
+                Line2D newWall = new Line2D.Double(wall.getP1(), wall.getP2());
+                aStarWalls.add(newWall);
+              }
+              // update traffic on waypoints in-between source-dest
+              for (Waypoint waypoint : path)
+              {
+                if (waypoint != path.get(0) && waypoint != path.get(path.size() - 1))
+                {
+                  // initialize waypoint traffic map if null
+                  if (waypoint.currentTrafficMap.get(planeState.route) == null)
+                  {
+                    waypoint.currentTrafficMap.put(planeState.route, new HashMap<Integer, Integer> ());
+                    Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
+                    flowTraffic.put(planeState.routeDirection, 0);
+                    flowTraffic.put(-planeState.routeDirection, 0);
+                  }
+                  Map<Integer, Integer> flowTraffic = waypoint.currentTrafficMap.get(planeState.route);
+                  int trafficValue = flowTraffic.get(planeState.routeDirection);
+                  trafficValue++;
+                  flowTraffic.put(planeState.routeDirection, trafficValue);
+                  waypoint.currentTraffic++;
+                }
               }
             }
           }
@@ -484,6 +518,10 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       planeState.state = PlaneState.States.COLLISION_STATE;
       planeState.currentTarget = collisionAvoidTarget;
+      if (planeState.route.lastPath == null)
+        planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
+      if (!planeState.route.lastPathDirectional.containsKey(planeState.routeDirection))
+        planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
     }
     else if (upgradeToAStar)
     {
@@ -492,6 +530,8 @@ public class AStarPlayer  extends airplane.sim.Player
       planeState.walls = aStarWalls;
       planeState.zoneRadius = aStarZoneRadius;
       planeState.takeoffAngle = takeoffAngle;
+      planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
+      planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
     }
 //    else if (upgradeToSafetyZone)
 //    {
@@ -532,6 +572,10 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       planeState.state = PlaneState.States.NULL_STATE;
       planeState.takeoffAngle = takeoffAngle;
+      if (planeState.route.lastPath == null)
+        planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
+      if (!planeState.route.lastPathDirectional.containsKey(planeState.routeDirection))
+        planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
     }
     return depart;
   }
@@ -551,6 +595,35 @@ public class AStarPlayer  extends airplane.sim.Player
 	  }
 	  
 	  return closestZone;
+  }
+
+  public boolean checkHighDensityFlowIntersection(ArrayList<Waypoint> path, Set<Route> currentFlowRoutes, double minDensity)
+  {
+    Set<Line2D> pathWalls = getFlowWalls(path);
+    Set<Route> highDensityFlows = new HashSet<Route> ();
+    for (Route flow : currentFlowRoutes)
+    {
+      if (getFlowDensity(flow) >= minDensity)
+      {
+        highDensityFlows.add(flow);
+      }
+    }
+    // update walls
+    walls.clear();
+    walls = getFlowWalls(highDensityFlows);
+    for (Line2D pathWall : pathWalls)
+    {
+      if (!isInLineOfSight(pathWall.getP1(), pathWall.getP2()))
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public double getFlowDensity(Route route)
+  {
+    return (route.currentTraffic * 5) / getPathLength(route.lastPath);
   }
 
   public PlaneState getCollisionPlaneState(ArrayList<Plane> simPlanes, int testPlaneId, double safetyRadius)
@@ -693,36 +766,47 @@ public class AStarPlayer  extends airplane.sim.Player
 
   public void updateWalls(Set<Route> currentFlowRoutes)
   {
-    
     walls.clear();
     for (Route flow : currentFlowRoutes)
     {
       walls.add(new Line2D.Double(flow.waypoint1.point, flow.waypoint2.point));
     }
-    
-    // iterate over each plane in the air, check route traffic, add walls along paths  
-    /*Set<Route> consideredRoutes = new HashSet<Route> ();
-    for (PlaneState planeState: planeStateMap)
+  }
+
+  public Set<Line2D> getFlowWalls(Set<Route> currentFlowRoutes)
+  {
+    Set<Line2D> flowWalls = new HashSet<Line2D> ();
+    // iterate over each route, add walls along paths  
+    for (Route route: currentFlowRoutes)
     {
-      Route route = planeState.route;
-      if (!consideredRoutes.contains(route))
-      {
-        consideredRoutes.add(route);
-        if (route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC)
-        {
-          if (planeState.plane.getBearing() >= 0)
-          {
-            for (int i = 0; i < planeState.path.size() - 1; i++)
-            {
-              Waypoint wp1 = planeState.path.get(i);
-              Waypoint wp2 = planeState.path.get(i + 1);
-              Line2D wall = new Line2D.Double(wp1.point, wp2.point);
-              walls.add(wall);
-            }
-          }
-        }
-      }
-    }*/
+      flowWalls.addAll(getFlowWalls(route.lastPath));
+    }
+    return flowWalls;
+  }
+
+  public Set<Line2D> getFlowWalls(ArrayList<Waypoint> path)
+  {
+    Set<Line2D> flowWalls = new HashSet<Line2D> ();
+    for (int i = 0; i < path.size() - 1; i++)
+    {
+      Waypoint wp1 = path.get(i);
+      Waypoint wp2 = path.get(i + 1);
+      Line2D wall = new Line2D.Double(wp1.point, wp2.point);
+      flowWalls.add(wall);
+    }
+    return flowWalls;
+  }
+
+  public double getPathLength(ArrayList<Waypoint> path)
+  {
+    double pathLength = 0;
+    for (int i = 0; i < path.size() - 1; i++)
+    {
+      Waypoint wp1 = path.get(i);
+      Waypoint wp2 = path.get(i + 1);
+      pathLength = pathLength + wp1.point.distance(wp2.point);
+    }
+    return pathLength;
   }
 
   /*
@@ -997,9 +1081,12 @@ public class AStarPlayer  extends airplane.sim.Player
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
             if (planeState.takeoffAngle == -1)
-              bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+            {
+              bearings[i] = straightLinePath(planeState);
+            }
             else
             {
+              straightLinePath(planeState);
               planeState.state = PlaneState.States.SPIRAL_STATE;
               bearings[i] = planeState.takeoffAngle;
               //logger.info("takeoff at sim: " + planeState.takeoffAngle + " round: " + round);
@@ -1115,27 +1202,24 @@ public class AStarPlayer  extends airplane.sim.Player
           simPlanes.add(planeStateMap.get(j).plane);
         }
         departCond = depart(p.id, round-1, simPlanes);*/
-        if (criticalPlanes.contains(p.id))
-          departCond = true;
-        else
+        ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
+        for (int j : flyingPlanes)
         {
-          ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
-          for (int j : flyingPlanes)
-          {
-            simPlanes.add(planeStateMap.get(j).plane);
-          }
-          departCond = depart(p.id, round-1, simPlanes);
+          simPlanes.add(planeStateMap.get(j).plane);
         }
+        departCond = depart(p.id, round-1, simPlanes);
         //logger.info("planeId: " + p.id + " real departure time: " + round);
         if (departCond && p.getBearing() != -2)
         {
           if (planeState.state == PlaneState.States.NULL_STATE)
           {
-
             if (planeState.takeoffAngle == -1)
-              bearings[p.id] = calculateBearing(p.getLocation(), p.getDestination());
+            {
+              bearings[p.id] = straightLinePath(planeState);
+            }
             else
             {
+              straightLinePath(planeState);
               planeState.state = PlaneState.States.SPIRAL_STATE;
               bearings[p.id] = planeState.takeoffAngle;
               //logger.info("takeoff: " + planeState.takeoffAngle + " round: " + round);
@@ -1194,6 +1278,12 @@ public class AStarPlayer  extends airplane.sim.Player
         }
         flyingPlanes.remove(p.id);
       }
+    }
+    // update route flows
+    for (Route route : routeSet)
+    {
+      if (route.currentTraffic == 0)
+        route.currentFlowRoutes = null;
     }
     return bearings;
   }
