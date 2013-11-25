@@ -55,6 +55,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double CRITICAL_WAYPOINT_SWITCH_ANGLE = 30;
   private static final double OPAQUE_MARGIN = 20;
   private static final double ADAPTIVE_TAKEOFF_ANGLE_RADIUS = 7;
+  private static final double INVALID_TAKEOFF_ANGLE_RANGE = 10;
   private static final int BOARD_SIZE = 100;
   private static final double CRITICAL_SAFETY_DIST = 15; // distance a safety zone's center must be from a potentail path
   private static final double CRITICAL_ZONE_DIST = 35;
@@ -172,16 +173,16 @@ public class AStarPlayer  extends airplane.sim.Player
     {
       depart = false;
       double bearing = getTakeoffAngle(result, planeId);
-      /*double destBearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
+      double destBearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
       double deltaBearing = addBearings(destBearing, -bearing);
-      if ((deltaBearing <= 135 && deltaBearing >= 0) || (deltaBearing >= 225 && deltaBearing <= 360))
+      if ((deltaBearing <= 180 - INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing >= 0) || (deltaBearing >= 180 + INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing <= 360))
       {
         bearing = bearing;
       }
       else
       {
         bearing = WAITING;
-      }*/
+      }
       if (bearing != WAITING)
       {
         // refresh simulator state
@@ -273,6 +274,43 @@ public class AStarPlayer  extends airplane.sim.Player
             upgradeToCollision = true;
           }
         }
+        /*if (!upgradeToCollision)
+        {
+          x = ((k+COLLISION_ZONE_RADIUS)*(k+COLLISION_ZONE_RADIUS) + c*c)/(2*c);
+          approachVector.normalize();
+          approachVector.multiply(x);
+          collisionVector = Vector.addVectors(locationVector, approachVector);
+          avoidVectorAbsolute = Vector.addVectors(collisionVector, avoidVector);
+          avoidVectorAbsoluteOpposite = Vector.addVectors(collisionVector, avoidVectorOpposite);
+
+          // refresh simulator state
+          refreshSimState();
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
+          planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
+
+          result = startSimulation(planesToSim, round);
+          if (result.getReason() == SimulationResult.NORMAL)
+          {
+            depart = true;
+            collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+            upgradeToCollision = true;
+          }
+        }
+        if (!upgradeToCollision)
+        {
+          // refresh simulator state
+          refreshSimState();
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
+          planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
+
+          result = startSimulation(planesToSim, round);
+          if (result.getReason() == SimulationResult.NORMAL)
+          {
+            depart = true;
+            collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+            upgradeToCollision = true;
+          }
+        }*/
       }
     }
     
@@ -399,7 +437,7 @@ public class AStarPlayer  extends airplane.sim.Player
                 break;
               }
             }
-            if (result.getReason() == SimulationResult.TOO_CLOSE) // try pruning conflicting waypoint(s)
+            if (result.getReason() != SimulationResult.NORMAL) // try pruning conflicting waypoint(s)
             {
               PlaneState collisionPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
               Route collideRoute = collisionPlaneState2.route;
@@ -488,6 +526,7 @@ public class AStarPlayer  extends airplane.sim.Player
                   waypoint.currentTraffic++;
                 }
               }
+              break;
             }
           }
         }
