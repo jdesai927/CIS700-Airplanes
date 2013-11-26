@@ -16,6 +16,7 @@ public class Route
     waypoint2 = wp2;
     Line2D routeLine = new Line2D.Double(wp1.point, wp2.point);
     lastPathDirectional = new HashMap<Integer, ArrayList<Waypoint> > ();
+    lastTakeoffAngle = new HashMap<Integer, Double > ();
   }
 
   int currentTraffic = 0;
@@ -23,6 +24,7 @@ public class Route
   ArrayList<Waypoint> lastPath;
   Map<Integer, ArrayList<Waypoint> > lastPathDirectional;
   Set<Route> currentFlowRoutes;
+  Map<Integer, Double> lastTakeoffAngle;
 
   // traffic direction
   public static final int FORWARD = 1;

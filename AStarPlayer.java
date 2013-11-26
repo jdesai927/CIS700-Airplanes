@@ -1,10 +1,7 @@
 package airplane.g5;
 
 import java.util.List;
-import java.awt.geom.Point2D;
-import java.awt.geom.Line2D;
-import java.awt.geom.Point2D.Double;
-import java.awt.geom.Rectangle2D;
+import java.awt.geom.*;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
@@ -54,7 +51,7 @@ public class AStarPlayer  extends airplane.sim.Player
   private static final double LANDING_WAYPOINT_ZONE_RADIUS = 11;
   private static final double CRITICAL_WAYPOINT_SWITCH_ANGLE = 30;
   private static final double OPAQUE_MARGIN = 20;
-  private static final double ADAPTIVE_TAKEOFF_ANGLE_RADIUS = 7;
+  private static final double ADAPTIVE_TAKEOFF_ANGLE_RADIUS = 10;
   private static final double INVALID_TAKEOFF_ANGLE_RANGE = 10;
   private static final int BOARD_SIZE = 100;
   private static final double CRITICAL_SAFETY_DIST = 15; // distance a safety zone's center must be from a potentail path
@@ -169,33 +166,6 @@ public class AStarPlayer  extends airplane.sim.Player
       logger.info("round " + round);
     }*/
 
-    if (result.getReason() == SimulationResult.TOO_CLOSE && currentFlowRoutes.size() == 0) // if collision close to source airport, change takeoff angle
-    {
-      depart = false;
-      double bearing = getTakeoffAngle(result, planeId);
-      double destBearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
-      double deltaBearing = addBearings(destBearing, -bearing);
-      if ((deltaBearing <= 180 - INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing >= 0) || (deltaBearing >= 180 + INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing <= 360))
-      {
-        bearing = bearing;
-      }
-      else
-      {
-        bearing = WAITING;
-      }
-      if (bearing != WAITING)
-      {
-        // refresh simulator state
-        refreshSimState();
-        planeStateMapSim.get(planeId).takeoffAngle = bearing;
-        result = startSimulation(planesToSim, round);
-        if (result.getReason() == SimulationResult.NORMAL)
-        {
-          takeoffAngle = bearing;
-          depart = true;
-        }
-      }
-    }
     if (result.getReason() != SimulationResult.NORMAL)
     {
       result = resultBackup;
@@ -313,6 +283,43 @@ public class AStarPlayer  extends airplane.sim.Player
         }*/
       }
     }
+    if (result.getReason() == SimulationResult.TOO_CLOSE && currentFlowRoutes.size() == 0) // if collision close to source airport, change takeoff angle
+    {
+      depart = false;
+      double bearing = getLastTakeoffAngle(planeId);
+      if (bearing != WAITING)
+      {
+        // refresh simulator state
+        refreshSimState();
+        planeStateMapSim.get(planeId).takeoffAngle = bearing;
+        result = startSimulation(planesToSim, round);
+        if (result.getReason() == SimulationResult.NORMAL)
+        {
+          takeoffAngle = bearing;
+          depart = true;
+        }
+      }
+      if (depart == false)
+      {
+        ArrayList<Double> bearings = getTakeoffAngle(result, planeId);
+        if (bearings != null)
+        {
+          for (Double bearing1 : bearings)
+          {
+            // refresh simulator state
+            refreshSimState();
+            planeStateMapSim.get(planeId).takeoffAngle = bearing1;
+            result = startSimulation(planesToSim, round);
+            if (result.getReason() == SimulationResult.NORMAL)
+            {
+              takeoffAngle = bearing1;
+              depart = true;
+              break;
+            }
+          }
+        }
+      }
+    }
     
     // check if intersecting with high density flow, take A* path in that case
     boolean intersectsFlow = false;
@@ -390,10 +397,10 @@ public class AStarPlayer  extends airplane.sim.Player
           }
 
           result = startSimulation(planesToSim, round);
-          if (result.getReason() == SimulationResult.TOO_CLOSE) // try different takeoff angle if collision near source airport
+          /*if (result.getReason() == SimulationResult.TOO_CLOSE) // try different takeoff angle if collision near source airport
           {
-            double tryTakeoffAngle = getTakeoffAngle(result, planeId);
-            if(takeoffAngle != WAITING)
+            double tryTakeoffAngle = getLastTakeoffAngle(planeId);
+            if(tryTakeoffAngle != WAITING)
             {
               // refresh simulator state
               refreshSimState();
@@ -408,7 +415,31 @@ public class AStarPlayer  extends airplane.sim.Player
               takeoffAngle = tryTakeoffAngle;
               result = startSimulation(planesToSim, round);
             }
-          }
+            if (result.getReason() != SimulationResult.NORMAL)
+            {
+              ArrayList<Double> bearings = getTakeoffAngle(result, planeId);
+              if(bearings != null)
+              {
+                for (Double bearing : bearings)
+                {
+                  // refresh simulator state
+                  refreshSimState();
+                  if (path.size() <= 2) // create landing zone
+                  {
+                    planeStateMapSim.get(planeId).zoneRadius = LANDING_WAYPOINT_ZONE_RADIUS;
+                  }
+                  planeStateMapSim.get(planeId).path = path;
+                  planeStateMapSim.get(planeId).state = PlaneState.States.ORBIT_STATE;
+                  planeStateMapSim.get(planeId).walls = walls;
+                  planeStateMapSim.get(planeId).takeoffAngle = bearing;
+                  takeoffAngle = bearing;
+                  result = startSimulation(planesToSim, round);
+                  if (result.getReason() == SimulationResult.NORMAL)
+                    break;
+                }
+              }
+            }
+          }*/
           for (int i = 0; i < 1; i++) // n tries
           {
             if (result.getReason() == SimulationResult.TOO_CLOSE) // try larger zone radius 
@@ -561,6 +592,7 @@ public class AStarPlayer  extends airplane.sim.Player
         planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
       if (!planeState.route.lastPathDirectional.containsKey(planeState.routeDirection))
         planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
+      planeState.route.lastTakeoffAngle.put(planeState.routeDirection, takeoffAngle);
     }
     else if (upgradeToAStar)
     {
@@ -571,6 +603,7 @@ public class AStarPlayer  extends airplane.sim.Player
       planeState.takeoffAngle = takeoffAngle;
       planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
       planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
+      planeState.route.lastTakeoffAngle.put(planeState.routeDirection, takeoffAngle);
     }
 //    else if (upgradeToSafetyZone)
 //    {
@@ -615,6 +648,7 @@ public class AStarPlayer  extends airplane.sim.Player
         planeState.route.lastPath = planeStateMapSim.get(planeState.plane.id).path;
       if (!planeState.route.lastPathDirectional.containsKey(planeState.routeDirection))
         planeState.route.lastPathDirectional.put(planeState.routeDirection, planeStateMapSim.get(planeState.plane.id).path);
+      planeState.route.lastTakeoffAngle.put(planeState.routeDirection, takeoffAngle);
     }
     return depart;
   }
@@ -682,19 +716,59 @@ public class AStarPlayer  extends airplane.sim.Player
     return planeStateMapSim.get(testPlaneId);
   }
 
-  public double getTakeoffAngle(SimulationResult result, int planeId)
+  public ArrayList<Double> getTakeoffAngle(SimulationResult result, int planeId)
   {
     PlaneState simPlaneState1 = planeStateMapSim.get(planeId);
     PlaneState planeState = planeStateMap.get(planeId);
     if (planeState.plane.getLocation().distance(simPlaneState1.plane.getLocation()) <= ADAPTIVE_TAKEOFF_ANGLE_RADIUS)
     {
       PlaneState simPlaneState2 = getCollisionPlaneState(result.getPlanes(), planeId, GameConfig.SAFETY_RADIUS);
+      PlaneState planeState2 = planeStateMap.get(simPlaneState2.plane.id);
       if (simPlaneState2.route != simPlaneState1.route || (simPlaneState2.route == simPlaneState1.route && simPlaneState2.routeDirection != simPlaneState1.routeDirection))
       {
-        return simPlaneState2.plane.getBearing();
+        double bearing = simPlaneState2.plane.getBearing();
+        double destBearing = calculateBearing(planeState.plane.getLocation(), planeState.plane.getDestination());
+        double deltaBearing = addBearings(destBearing, -bearing);
+        if ((deltaBearing <= 180 - INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing >= 0) || (deltaBearing >= 180 + INVALID_TAKEOFF_ANGLE_RANGE && deltaBearing <= 360) || planeState2.route.currentTraffic >= CRITICAL_ROUTE_TRAFFIC)
+        {
+          bearing = bearing;
+        }
+        else
+        {
+          bearing = WAITING;
+        }
+        ArrayList<Double> bearings = new ArrayList<Double> ();
+        double newBearing = destBearing;
+        /*double sign = 1;
+        if (destBearing < 180)
+          sign = -1;*/
+        double sign = -1;
+        if (bearing != WAITING)
+        {
+          while(true)
+          {
+            if (Math.abs(addBearings(bearing, -newBearing)) <= 10)
+            {
+              bearings.add(bearing);
+              break;
+            }
+            newBearing = addBearings(newBearing, sign*10);
+            bearings.add(newBearing);
+          }
+        }
+        return bearings;
       }
     }
-    return -1;
+    return null;
+  }
+
+  public double getLastTakeoffAngle(int planeId)
+  {
+    PlaneState planeState =  planeStateMap.get(planeId);
+    double lastTakeoffAngle = WAITING;
+    if (planeState.route.lastTakeoffAngle.containsKey(planeState.routeDirection))
+      lastTakeoffAngle = planeState.route.lastTakeoffAngle.get(planeState.routeDirection);
+    return lastTakeoffAngle;
   }
 
   public void refreshSimState()
@@ -1040,7 +1114,7 @@ public class AStarPlayer  extends airplane.sim.Player
   @Override
   protected double[] simulateUpdate(ArrayList<Plane> planes, int round, double[] bearings)
   {
-    if (round - simStartRound > 10000)
+    if (round - simStartRound > 200)
     {
       stopSimulation();
     }
@@ -1263,12 +1337,14 @@ public class AStarPlayer  extends airplane.sim.Player
               bearings[p.id] = planeState.takeoffAngle;
               //logger.info("takeoff: " + planeState.takeoffAngle + " round: " + round);
             }
+            logger.debug("plane: " + i + " taking off in NULL_STATE, angle: " + bearings[p.id]);
           }
           else if (planeState.state == PlaneState.States.COLLISION_STATE)
           {
             // Move in orbital tangent
 //            bearings[i] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
         	  bearings[p.id] = collisionOrbit(planeState, (Point2D.Double) planeState.currentTarget);
+            logger.debug("plane: " + i + " taking off in COLLISION_STATE, target: " + planeState.currentTarget.getX() + ", " + planeState.currentTarget.getY());
           }
           else if (planeState.state == PlaneState.States.ORBIT_STATE)
           {
@@ -1285,7 +1361,7 @@ public class AStarPlayer  extends airplane.sim.Player
               bearings[p.id] = bearing;
             else
               bearings[p.id] = planeState.takeoffAngle;
-
+            logger.debug("plane: " + i + " taking off in ORBIT_STATE, angle: " + bearings[p.id]);
           }
           planeState.route.currentTraffic++;
           if (!flyingPlanes.contains(p.id))
