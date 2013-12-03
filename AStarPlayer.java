@@ -27,6 +27,7 @@ public class AStarPlayer  extends airplane.sim.Player
 
   private ArrayList<Plane> sortedPlanes = new ArrayList<Plane>();
   private Set<Integer> flyingPlanes = new HashSet<Integer>();
+  private Set<Integer> landedPlanes = new HashSet<Integer>();
   private Set<Integer> criticalPlanes = new HashSet<Integer>();
   
   private ArrayList<Zone> safetyZones = new ArrayList<Zone>();
@@ -98,7 +99,7 @@ public class AStarPlayer  extends airplane.sim.Player
 
     return reasonString;
   }
-
+  
   private boolean depart(int planeId, int round, ArrayList<Plane> planes)
   {
     simStartRound = round;
@@ -936,9 +937,9 @@ public class AStarPlayer  extends airplane.sim.Player
     planeStateMapSim = new ArrayList<PlaneState> ();
     
     sortedPlanes.addAll(planes);
-    Collections.sort(sortedPlanes, INCREASING_DEPT);
-    Collections.sort(sortedPlanes, DECREASING_DIST);
-    //Collections.sort(sortedPlanes, DECREASING_COST);
+//    Collections.sort(sortedPlanes, INCREASING_DEPT);
+//    Collections.sort(sortedPlanes, DECREASING_DIST);
+  
     
     // initialize ids to distinguish planes
     for (int i = 0; i < planes.size(); i++)
@@ -950,6 +951,10 @@ public class AStarPlayer  extends airplane.sim.Player
       planeStateMap.add(p.id, planeState);
     }
 
+    Collections.sort(sortedPlanes, INCREASING_DEPT);
+//    Collections.sort(sortedPlanes, DECREASING_TOTAL_DIST);
+    Collections.sort(sortedPlanes, DECREASING_FINAL_DEPART);
+    
     // compute routes
     for (PlaneState planeState : planeStateMap)
     {
@@ -995,8 +1000,6 @@ public class AStarPlayer  extends airplane.sim.Player
       if (!routeDirectionMap.containsKey(route))
         routeDirectionMap.put(route, planeState.routeDirection);
     }
-    
-    calculateSafetyZones(planes);
 
     ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
     Map<Route, Integer> routesSeen = new HashMap<Route,Integer> ();
@@ -1046,6 +1049,135 @@ public class AStarPlayer  extends airplane.sim.Player
       }
     }*/
   }
+  
+  private double getDistance(Plane p) {
+	  double distance = p.getLocation().distance(p.getDestination());
+	  return distance;
+  }
+  
+  private double sumDistance(ArrayList<Integer> indices) {
+	  double dist = 0;
+	  if (indices != null) 
+	  {
+		  for (Integer i : indices)
+		  {
+			  Plane p = planeStateMap.get(i).plane;
+			  dist += getDistance(p);
+		  }
+	  }
+	  return dist;
+  }
+  
+  private int latestDeparture(ArrayList<Integer> indices) {
+	  int last = Integer.MIN_VALUE;
+	  if (indices != null) {
+		  for (Integer i : indices)
+		  {
+			  Plane p = planeStateMap.get(i).plane;
+			  int depart = p.getDepartureTime();
+			  if (depart > last) {
+				  last = depart;
+			  }
+		  }
+	  }
+	  return last;
+  }
+  
+  private Comparator<Plane> DECREASING_FINAL_DEPART = new Comparator<Plane>() {
+	  public int compare(Plane p1, Plane p2)
+	  {
+		  ArrayList<Integer> d1 = p1.getDependencies();
+		  ArrayList<Integer> d2 = p2.getDependencies();
+		  if (d1 == null && d2 == null) {
+			double dist1 = getDistance(p1);
+			double dist2 = getDistance(p2);
+			if (dist1 > dist2) {
+				return -1;
+			}
+			else if (dist2 > dist1) {
+				return 1;
+			}
+			else return 0;
+		  }
+		  
+		  int l1 = latestDeparture(d1);
+		  int l2 = latestDeparture(d2);
+		  if (l1 > l2)  
+			  return -1;
+		  else if (l2 > l1)
+			  return 1;
+		  else { 
+			  // same final departure time, return comparison of total path distance
+			 double dist1 = getDistance(p1) + sumDistance(d1); 
+			 double dist2 = getDistance(p2) + sumDistance(d2);
+			 
+			 if (dist1 > dist2) return -1;
+			 else if (dist2 > dist1) return 1;
+			 else return 0;
+		  }
+	  }
+  };
+  
+  private Comparator<Plane> NUMBER_DEPENDENCIES = new Comparator<Plane>() {
+	  public int compare(Plane p1, Plane p2)
+	  {
+		  ArrayList<Integer> d1 = p1.getDependencies();
+		  ArrayList<Integer> d2 = p2.getDependencies();
+		  
+		  if (d1 == null && d2 != null) {
+			  return 1;
+		  }
+		  else if (d2 == null && d1 != null) {
+			  return -1;
+		  }
+		  else if (d1 == null && d2 == null) {
+			  double dist1 = getDistance(p1);
+			  double dist2 = getDistance(p2);
+			  if (dist1 > dist2)
+			  {
+				  return -1;
+			  }
+			  else if (dist2 > dist1) 
+			  {
+				  return 1;
+			  }
+			  else return 0;
+		  }
+		  else if (d1.size() > d2.size()) {
+			return -1;  
+		  }
+		  else if (d2.size() > d1.size()) {
+			  return 1;
+		  }
+		  else { 
+			  double dist1 = getDistance(p1) + sumDistance(d1); 
+			  double dist2 = getDistance(p2) + sumDistance(d2);
+			  if (dist1 > dist2) 
+			  {
+				  return -1;
+			  }
+			  else if (dist2 > dist1)
+			  {
+				  return 1;
+			  }
+			  return 0;
+		  }
+	  }
+  };
+  
+  private Comparator<Plane> DECREASING_TOTAL_DIST = new Comparator<Plane>() {
+	  public int compare(Plane p1, Plane p2)
+	  {
+		  ArrayList<Integer> d1 = p1.getDependencies();
+		  ArrayList<Integer> d2 = p2.getDependencies();
+		  double dist1 = getDistance(p1) + sumDistance(d1); 
+		  double dist2 = getDistance(p2) + sumDistance(d2);
+		  
+		  if (dist1 < dist2) return 1;
+		  else if (dist1 > dist2) return -1;
+		  else return 0;
+	  }
+  };
 
   private Comparator<Plane> INCREASING_DEPT = new Comparator<Plane>()
   {
@@ -1086,6 +1218,24 @@ public class AStarPlayer  extends airplane.sim.Player
       }
     }
   };
+  
+  public boolean dependenciesLanded(Plane p)
+  {
+	  boolean landed = true;
+	  ArrayList<Integer> dependencies = p.getDependencies();
+	  if (dependencies == null)
+	  {
+		  return true;
+	  }
+	  for (Integer i: dependencies)
+	  {
+		  if (!landedPlanes.contains(i))
+		  {
+			  return false;
+		  }
+	  }
+	  return landed;
+  }
   
   private Comparator<Plane> DECREASING_DIST = new Comparator<Plane>()
   {
@@ -1188,7 +1338,7 @@ public class AStarPlayer  extends airplane.sim.Player
 
       else
       {
-        if (p.getBearing() != -2 && p.getDepartureTime() <= round)
+        if (p.getBearing() != -2 && p.getDepartureTime() <= round && dependenciesLanded(p))
         {
           //logger.info("planeId: " + p.id + " sim departure time: " + round);
           if (planeState.state == PlaneState.States.NULL_STATE)
@@ -1306,7 +1456,7 @@ public class AStarPlayer  extends airplane.sim.Player
         }
       }
 
-      else if (round >= p.getDepartureTime() && p.getBearing() != -2)
+      else if (round >= p.getDepartureTime() && p.getBearing() != -2 && dependenciesLanded(p))
       {
         boolean departCond = false;
         /*ArrayList<Plane> simPlanes = new ArrayList<Plane> ();
@@ -1391,7 +1541,8 @@ public class AStarPlayer  extends airplane.sim.Player
             }
           }
         }
-        flyingPlanes.remove(p.id);
+       flyingPlanes.remove(p.id);
+       landedPlanes.add(planes.indexOf(p));
       }
     }
     // update route flows
