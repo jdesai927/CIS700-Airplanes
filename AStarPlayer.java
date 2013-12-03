@@ -257,6 +257,7 @@ public class AStarPlayer  extends airplane.sim.Player
           // refresh simulator state
           refreshSimState();
           planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsoluteOpposite.x, avoidVectorAbsoluteOpposite.y);
+<<<<<<< HEAD
           planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
           result = startSimulation(planesToSim, round);
@@ -272,6 +273,8 @@ public class AStarPlayer  extends airplane.sim.Player
           // refresh simulator state
           refreshSimState();
           planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
+=======
+>>>>>>> 865714074933d427dd285fb155d9b316eca97563
           planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
 
           result = startSimulation(planesToSim, round);
@@ -281,6 +284,24 @@ public class AStarPlayer  extends airplane.sim.Player
             collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
             upgradeToCollision = true;
           }
+<<<<<<< HEAD
+=======
+        }
+        if (!upgradeToCollision)
+        {
+          // refresh simulator state
+          refreshSimState();
+          planeStateMapSim.get(planeId).currentTarget = new Point2D.Double(avoidVectorAbsolute.x, avoidVectorAbsolute.y);
+          planeStateMapSim.get(planeId).state = PlaneState.States.COLLISION_STATE;
+
+          result = startSimulation(planesToSim, round);
+          if (result.getReason() == SimulationResult.NORMAL)
+          {
+            depart = true;
+            collisionAvoidTarget = planeStateMapSim.get(planeId).currentTarget;
+            upgradeToCollision = true;
+          }
+>>>>>>> 865714074933d427dd285fb155d9b316eca97563
         }*/
       }
     }
@@ -937,9 +958,6 @@ public class AStarPlayer  extends airplane.sim.Player
     planeStateMapSim = new ArrayList<PlaneState> ();
     
     sortedPlanes.addAll(planes);
-//    Collections.sort(sortedPlanes, INCREASING_DEPT);
-//    Collections.sort(sortedPlanes, DECREASING_DIST);
-  
     
     // initialize ids to distinguish planes
     for (int i = 0; i < planes.size(); i++)
